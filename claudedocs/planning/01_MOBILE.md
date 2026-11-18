@@ -67,7 +67,7 @@ PRD 지정 4개 폴더(`screens`, `services`, `widgets`, `models`)를 유지하�
 | 화면 | 구성 |
 |------|------|
 | CameraScreen (메인) | 전체 화면 프리뷰 / 상단: 투명도 슬라이더, 설정 아이콘, 비율 토글 / 중앙: 실루엣 오버레이 + 자세계 십자선 / 하단: 프리셋 썸네일(좌), 셔터(중), 렌즈 전환(우) |
-| PresetBottomSheet | 화면 50% 높이 Draggable Sheet, 카테고리 탭(전신/상반신/부르고찍기/옆모습/소품) + 3열 GridView, 첫 칸은 "내 사진으로 만들기" |
+| PresetBottomSheet | 화면 50% 높이 Draggable Sheet, 카테고리 칩(전체/전신/상반신/앉은 포즈/옆모습/소품) + 3열 GridView, 첫 칸은 "내 사진으로 만들기" |
 | SettingsScreen | 계정(로그인 / 이름·제공자·역할 배지 / 로그아웃 / 회원 탈퇴), 무음 촬영(기본 OFF), 비율 자동 크롭(기본 OFF), 격자선 표시, 개인정보처리방침/약관(web 링크), 오픈소스 라이선스, 앱 버전 |
 | LoginScreen | "로그인은 선택 사항" 안내 + 카카오 / Google / Apple(iOS만) 버튼. 빌드에 키가 없는 제공자는 숨김 |
 | 저장 완료 | SnackBar "저장 완료" + 썸네일 갱신 |
@@ -196,16 +196,19 @@ PRD 지정 4개 폴더(`screens`, `services`, `widgets`, `models`)를 유지하�
 - [ ] AdMob 실제 App ID / 광고 단위 ID 입력 (사용자 계정 필요)
 
 ### M2. 카메라 UI (PRD Step 2)
-- [ ] 풀스크린 프리뷰 + 라이프사이클 처리
-- [ ] 셔터 / 렌즈 전환 / 프리셋 썸네일 버튼
-- [ ] 프리셋 Bottom Sheet + 카테고리 탭 + GridView
-- [ ] 5번째 칸 Native Ad 분기
-- [ ] 번들 기본 프리셋 + `PresetRepository`
+- [x] 풀스크린 프리뷰 + 라이프사이클 처리 (권한 팝업 중 초기화 경쟁 상태 수정, 카메라 열기 직렬화)
+- [x] 셔터 / 렌즈 전환 / 프리셋 썸네일 버튼 (카메라 없는 기기 안내 화면)
+- [x] 프리셋 Bottom Sheet + 카테고리 칩 + 3열 GridView
+- [x] 5번째 칸 Native Ad 분기 (플래그 OFF·로드 실패 시 기본 프리셋)
+- [x] 번들 기본 프리셋 8개 + `PresetRepository` (이미지 없이 포즈 좌표로 실루엣 렌더링)
+- [ ] 네이티브 광고 칸 레이아웃: 기본 템플릿은 그리드 칸에 맞지 않음 → 고도화 때 커스텀 `NativeAdFactory`
+- [ ] 서버 `GET /v1/presets` 연동 + 로컬 캐시 (고도화)
 
 ### M3. 실루엣 오버레이 (PRD Step 3)
 - [ ] `PoseService` (single / stream 모드)
 - [ ] `PreviewTransform` 좌표 변환
-- [ ] `SilhouettePainter` + 투명도 슬라이더
+- [x] `SilhouettePainter`(점선, 프리셋 비율 프레임 기준) + 투명도 슬라이더
+- [ ] 투명도 값 저장 (고도화)
 - [ ] 갤러리 사진 → 커스텀 실루엣 (보상형 광고 게이트)
 
 ### M4. 스마트 디렉팅 (PRD Step 4)
@@ -215,7 +218,7 @@ PRD 지정 4개 폴더(`screens`, `services`, `widgets`, `models`)를 유지하�
 
 ### M5. 촬영·저장·전면 광고 (PRD Step 5)
 - [ ] 일반 촬영 / 무음 촬영 / 비율 크롭
-- [ ] 갤러리 저장 + 권한
+- [x] 일반 촬영 → 갤러리 "LikeZZIX" 앨범 저장 + 저장 완료 스낵바 (Android 실기기 확인)
 - [ ] 전면 광고 카운터 + 저장 완료 토스트
 - [ ] 설정 화면
 

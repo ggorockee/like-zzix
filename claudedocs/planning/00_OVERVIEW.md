@@ -66,7 +66,8 @@
 |------|------|------|
 | M0 | mobile 프로젝트 생성, 폴더 구조, 린트, Firebase 연결 | [x] |
 | M1 | Remote Config + AdMob 초기화 | [x] |
-| M2~M5 | mobile PRD Step 2~5 (`01_MOBILE.md`) — 프로토타입 우선 | [ ] |
+| M2 | 카메라 화면 + 프리셋 시트 + 실루엣 오버레이 + 촬영·저장 (화면 MVP) | [x] |
+| M3~M5 | 포즈 추출·매칭, 자세계, 무음/크롭, 전면 광고 (고도화) | [ ] |
 | S1~S3 | server 프리셋 API, admin API, Docker/K8s (`02_SERVER.md`) | [ ] |
 | A1~A3 | admin 로그인, 프리셋 CRUD, 포즈 추출 (`04_ADMIN.md`) | [ ] |
 | W1~W2 | web 랜딩, 정책 페이지, 딥링크 (`03_WEB.md`) | [ ] |
