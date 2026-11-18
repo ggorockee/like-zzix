@@ -70,12 +70,13 @@
 |------|------|-----------|
 | 퍼블리셔 | 기존 계정 사용 (돌려받엔과 동일) | `pub-8516861197467665` |
 | app-ads.txt | 기존 `https://woohalabs.com/app-ads.txt` 사용 | 스토어 등록 시 개발자 웹사이트를 `woohalabs.com`으로 입력해야 인증됨 |
-| 앱 등록 (Android / iOS) | 진행 시 갱신 | AdMob 콘솔 > 앱 추가 (스토어 미게시 상태로 등록 후 출시 때 스토어 연결) |
-| 광고 단위 | 진행 시 갱신 | 네이티브(프리셋 그리드), 전면(저장 N회), 보상형(커스텀 실루엣) |
+| 앱 등록 (Android / iOS) | [x] 2026-11-19 등록 | `라익찍스 Android`, `라익찍스 iOS` (스토어 미게시 → 상태 "검토 필요·광고 게재 제한됨", 출시 후 "스토어 추가"로 연결하면 해제) |
+| 광고 단위 | [x] 플랫폼별 3개 | `preset_grid_native`(네이티브 고급형), `photo_saved_interstitial`(전면), `custom_silhouette_rewarded`(보상형, 기본 리워드 1 Reward) |
 | App ID 입력 위치 | git 제외 파일 | Android `mobile/android/local.properties`의 `admob.appId`, iOS `mobile/ios/Flutter/Secrets.xcconfig`의 `ADMOB_APP_ID` |
 | 광고 단위 ID 입력 위치 | git 제외 파일 | `mobile/env/prod.json` (`ADMOB_ANDROID_*`, `ADMOB_IOS_*`) |
 | 노출 제어 | Remote Config `ads` 그룹 | 출시 초기 모두 false → 사용자 확보 후 하나씩 켜고 대시보드·AdMob으로 영향 확인 |
-| UMP 동의 메시지 | 미완료 | AdMob > 개인정보 보호 및 메시지 > GDPR 메시지 생성·게시 |
+| UMP 동의 메시지 | [ ] 스토어 연결 후 | 2026-11-19 시도: 새 유럽 규정 메시지에 두 앱과 개인정보처리방침 URL(`https://like-zzix.woohalabs.com/privacy`)을 지정했으나 게시·임시저장 버튼이 비활성 → 저장하지 않음. 기존 메시지는 스토어에 연결된 리뷰맵 앱만 대상이라 스토어 연결이 필요한 것으로 추정 (확인 필요). 출시 후 다시 생성·게시 |
+| 실제 ID 반영 | [x] 2026-11-19 | Android `local.properties`, iOS `Secrets.xcconfig`, `env/prod.json`에 입력. 릴리스 빌드에서 Android 매니페스트·iOS Info.plist App ID와 광고 단위 6개 포함 확인 |
 
 디버그 빌드는 항상 Google 테스트 광고를 쓴다. 실제 광고를 개발 기기에서 클릭하면 계정 정지 위험이 있으므로 AdMob 콘솔에 테스트 기기를 등록한다.
 
