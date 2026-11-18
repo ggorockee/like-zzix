@@ -1,0 +1,5 @@
+// 네이티브 설정 기본값 (공개 가능한 값만).
+// 실제 값은 git에 포함하지 않는 Secrets.xcconfig에서 같은 키로 덮어쓴다.
+
+// Google 테스트 AdMob App ID
+ADMOB_APP_ID = ca-app-pub-3940256099942544~1458002511

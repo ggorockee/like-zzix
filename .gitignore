@@ -1,0 +1,28 @@
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+
+# Claude 로컬 설정
+.claude/settings.local.json
+
+# 개인 메모
+request.md
+
+# 저작권 미확보 레퍼런스 이미지 (타인 게시물, 공개 저장소 배포 금지)
+claudedocs/images/
+
+# 환경별 비밀값
+mobile/env/*.json
+!mobile/env/*.example.json
+**/.env
+**/.env.*
+
+# 실제 AdMob App ID (iOS). 기본값은 mobile/ios/Flutter/AdMob.xcconfig의 테스트 ID
+mobile/ios/Flutter/Secrets.xcconfig
+
+# Firebase 설정 파일 (reviewmaps와 동일 정책: 공개 저장소에 포함하지 않음, flutterfire configure로 생성)
+mobile/android/app/google-services.json
+mobile/ios/Runner/GoogleService-Info.plist
+mobile/lib/firebase_options.dart
+mobile/firebase.json
