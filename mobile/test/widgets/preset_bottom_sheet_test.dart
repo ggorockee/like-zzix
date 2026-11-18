@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:likezzix/models/preset.dart';
 import 'package:likezzix/providers/preset_providers.dart';
 import 'package:likezzix/services/preset_repository.dart';
 import 'package:likezzix/widgets/native_ad_tile.dart';
@@ -13,6 +14,9 @@ void main() {
   final presets = PresetRepository.parse(
     File(PresetRepository.bundledAsset).readAsStringSync(),
   );
+
+  Finder itemOf(Preset preset) =>
+      find.byWidgetPredicate((w) => w is PresetGridItem && w.preset == preset);
 
   Future<ProviderContainer> pumpSheet(WidgetTester tester) async {
     // 실제 폰과 비슷한 화면 크기 (360x800 논리 픽셀)
@@ -57,18 +61,18 @@ void main() {
 
   testWidgets('카테고리 필터', (tester) async {
     await pumpSheet(tester);
-    await tester.tap(find.widgetWithText(ChoiceChip, '상반신'));
+    await tester.tap(find.widgetWithText(ChoiceChip, '부르고 찍기'));
     await tester.pumpAndSettle();
 
     final shown = tester
         .widgetList<PresetGridItem>(find.byType(PresetGridItem))
         .map((w) => w.preset.title);
-    expect(shown, ['턱 괴기', '손 인사']);
+    expect(shown, ['부르고 찍기']);
   });
 
   testWidgets('프리셋을 고르면 선택되고 시트가 닫힘, 다시 고르면 해제', (tester) async {
     final container = await pumpSheet(tester);
-    await tester.tap(find.text(presets.first.title));
+    await tester.tap(itemOf(presets.first));
     await tester.pumpAndSettle();
 
     expect(container.read(selectedPresetProvider), presets.first);
@@ -76,7 +80,7 @@ void main() {
 
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text(presets.first.title));
+    await tester.tap(itemOf(presets.first));
     await tester.pumpAndSettle();
     expect(container.read(selectedPresetProvider), isNull);
   });

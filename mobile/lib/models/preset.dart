@@ -1,12 +1,13 @@
+import 'dart:ui' show Offset;
+
 import 'package:flutter/foundation.dart';
 
 /// 프리셋 카테고리. `id`는 서버/번들 JSON의 `category` 값.
 enum PresetCategory {
-  fullBody('full_body', '전신'),
-  upperBody('upper_body', '상반신'),
-  sitting('sitting', '앉은 포즈'),
+  fullBody('full_body', '전신샷'),
+  lookBack('look_back', '부르고 찍기'),
   side('side', '옆모습'),
-  prop('prop', '소품');
+  cafe('cafe', '음료·카페');
 
   const PresetCategory(this.id, this.label);
 
@@ -70,6 +71,9 @@ class Preset {
     required this.rollDeg,
     required this.landmarks,
     required this.sortOrder,
+    this.guide = const [],
+    this.outline = const [],
+    this.referenceAsset,
   });
 
   factory Preset.fromJson(Map<String, dynamic> json) {
@@ -93,6 +97,18 @@ class Preset {
       rollDeg: (camera['roll_deg'] as num?)?.toDouble() ?? 0,
       landmarks: landmarks,
       sortOrder: (json['sort_order'] as num?)?.toInt() ?? 0,
+      guide: [
+        for (final step in json['guide'] as List<dynamic>? ?? const [])
+          step as String,
+      ],
+      outline: [
+        for (final p in json['outline'] as List<dynamic>? ?? const [])
+          Offset(
+            ((p as List<dynamic>)[0] as num).toDouble(),
+            (p[1] as num).toDouble(),
+          ),
+      ],
+      referenceAsset: json['reference_asset'] as String?,
     );
   }
 
@@ -107,6 +123,17 @@ class Preset {
   final double rollDeg;
   final List<PoseLandmark> landmarks;
   final int sortOrder;
+
+  /// 이 구도대로 찍기 위한 단계별 안내.
+  final List<String> guide;
+
+  /// 사람 윤곽선 (프레임 기준 0~1 좌표, 시계방향 폐곡선). 없으면 관절로 실루엣을 그림.
+  final List<Offset> outline;
+
+  /// 레퍼런스 사진 asset 경로. 로컬 빌드에만 존재할 수 있으므로 없을 때를 처리해야 함.
+  final String? referenceAsset;
+
+  bool get hasOutline => outline.length >= 3;
 
   static double _parseAspectRatio(String? value) {
     final parts = value?.split(':');

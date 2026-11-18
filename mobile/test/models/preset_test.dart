@@ -5,14 +5,21 @@ import 'package:likezzix/models/preset.dart';
 import 'package:likezzix/services/preset_repository.dart';
 
 void main() {
-  test('번들 프리셋: 8개 이상, 모두 33점, sort_order 정렬', () {
+  test('번들 프리셋: 모두 33점·윤곽선·가이드 포함, sort_order 정렬', () {
     final raw = File(PresetRepository.bundledAsset).readAsStringSync();
     final presets = PresetRepository.parse(raw);
 
-    expect(presets.length, greaterThanOrEqualTo(8));
+    expect(presets.length, greaterThanOrEqualTo(4));
     for (final p in presets) {
       expect(p.landmarks, hasLength(PoseIndex.count), reason: p.id);
       expect(p.title, isNotEmpty);
+      expect(p.hasOutline, isTrue, reason: p.id);
+      expect(p.guide, isNotEmpty, reason: p.id);
+      expect(p.referenceAsset, startsWith('assets/presets/reference/'));
+      for (final o in p.outline) {
+        expect(o.dx, inInclusiveRange(0, 1), reason: p.id);
+        expect(o.dy, inInclusiveRange(0, 1), reason: p.id);
+      }
     }
     final orders = presets.map((p) => p.sortOrder).toList();
     expect(orders, [...orders]..sort());
@@ -42,5 +49,7 @@ void main() {
     expect(presets.map((p) => p.id), ['ok']);
     expect(presets.single.aspectRatio, closeTo(0.8, 1e-9));
     expect(presets.single.category, PresetCategory.side);
+    expect(presets.single.hasOutline, isFalse);
+    expect(presets.single.guide, isEmpty);
   });
 }

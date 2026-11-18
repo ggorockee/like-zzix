@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../core/app_theme.dart';
 import '../models/preset.dart';
-import 'silhouette_painter.dart';
+import 'reference_image.dart';
 
-/// 프리셋 그리드 칸: 실루엣 미리보기 + 제목. 선택 시 브랜드 색 테두리.
+/// 프리셋 그리드 칸: 레퍼런스 사진(없으면 실루엣) + 제목. 선택 시 브랜드 색 테두리.
 class PresetGridItem extends StatelessWidget {
   const PresetGridItem({
     super.key,
@@ -23,42 +23,44 @@ class PresetGridItem extends StatelessWidget {
       button: true,
       selected: selected,
       label: '${preset.title} 프리셋',
-      child: InkWell(
+      child: GestureDetector(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Ink(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
           decoration: BoxDecoration(
             color: const Color(0xFF2A2A2E),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: selected ? AppTheme.brand : Colors.transparent,
-              width: 2,
+              width: 2.5,
             ),
           ),
-          child: Column(
+          clipBehavior: Clip.antiAlias,
+          child: Stack(
+            fit: StackFit.expand,
             children: [
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
-                  child: CustomPaint(
-                    size: Size.infinite,
-                    painter: SilhouettePainter(
-                      landmarks: preset.landmarks,
-                      aspectRatio: preset.aspectRatio,
-                      color: Colors.white70,
-                      strokeWidth: 1.6,
-                      dashed: false,
-                    ),
+              ReferenceImage(preset: preset),
+              const DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.center,
+                    end: Alignment.bottomCenter,
+                    colors: [Colors.transparent, Colors.black87],
                   ),
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+              Positioned(
+                left: 8,
+                right: 8,
+                bottom: 8,
                 child: Text(
                   preset.title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelMedium,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ],

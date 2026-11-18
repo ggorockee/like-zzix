@@ -66,8 +66,8 @@ PRD 지정 4개 폴더(`screens`, `services`, `widgets`, `models`)를 유지하�
 
 | 화면 | 구성 |
 |------|------|
-| CameraScreen (메인) | 전체 화면 프리뷰 / 상단: 투명도 슬라이더, 설정 아이콘, 비율 토글 / 중앙: 실루엣 오버레이 + 자세계 십자선 / 하단: 프리셋 썸네일(좌), 셔터(중), 렌즈 전환(우) |
-| PresetBottomSheet | 화면 50% 높이 Draggable Sheet, 카테고리 칩(전체/전신/상반신/앉은 포즈/옆모습/소품) + 3열 GridView, 첫 칸은 "내 사진으로 만들기" |
+| CameraScreen (메인) | 전체 화면 프리뷰 / 상단: 투명도 슬라이더 + 단계별 촬영 가이드 카드(접기 가능), 우측 레퍼런스 사진 PiP(탭하면 크게) / 중앙: 레퍼런스 비율 프레임(모서리+3분할) + 사람 윤곽선 실루엣(글로우) + 자세계 / 하단: 각도 안내 문구, 프리셋 썸네일(좌), 셔터(중), 렌즈 전환(우) |
+| PresetBottomSheet | 화면 50% 높이 Draggable Sheet, 카테고리 칩(전체/전신샷/부르고 찍기/옆모습/음료·카페), 칸에는 레퍼런스 사진(없으면 실루엣) + 3열 GridView, 첫 칸은 "내 사진으로 만들기" |
 | SettingsScreen | 계정(로그인 / 이름·제공자·역할 배지 / 로그아웃 / 회원 탈퇴), 무음 촬영(기본 OFF), 비율 자동 크롭(기본 OFF), 격자선 표시, 개인정보처리방침/약관(web 링크), 오픈소스 라이선스, 앱 버전 |
 | LoginScreen | "로그인은 선택 사항" 안내 + 카카오 / Google / Apple(iOS만) 버튼. 빌드에 키가 없는 제공자는 숨김 |
 | 저장 완료 | SnackBar "저장 완료" + 썸네일 갱신 |
@@ -200,19 +200,22 @@ PRD 지정 4개 폴더(`screens`, `services`, `widgets`, `models`)를 유지하�
 - [x] 셔터 / 렌즈 전환 / 프리셋 썸네일 버튼 (카메라 없는 기기 안내 화면)
 - [x] 프리셋 Bottom Sheet + 카테고리 칩 + 3열 GridView
 - [x] 5번째 칸 Native Ad 분기 (플래그 OFF·로드 실패 시 기본 프리셋)
-- [x] 번들 기본 프리셋 8개 + `PresetRepository` (이미지 없이 포즈 좌표로 실루엣 렌더링)
+- [x] 기본 프리셋 4개 = `claudedocs/images` 레퍼런스(전신샷/부르고 찍기/옆모습/음료 마시는 컷). MediaPipe Pose Landmarker(heavy)로 33점 + 사람 윤곽선을 미리 추출해 `presets.json`에 포함
+- [x] 레퍼런스 사진은 `assets/presets/reference/`에 로컬 빌드 전용 (git 제외). 없으면 윤곽선 실루엣으로 대체
+- [ ] 출시 전: 레퍼런스 사진을 자체 촬영/라이선스 확보 사진으로 교체 (ADR #6)
 - [ ] 네이티브 광고 칸 레이아웃: 기본 템플릿은 그리드 칸에 맞지 않음 → 고도화 때 커스텀 `NativeAdFactory`
 - [ ] 서버 `GET /v1/presets` 연동 + 로컬 캐시 (고도화)
 
 ### M3. 실루엣 오버레이 (PRD Step 3)
 - [ ] `PoseService` (single / stream 모드)
 - [ ] `PreviewTransform` 좌표 변환
-- [x] `SilhouettePainter`(점선, 프리셋 비율 프레임 기준) + 투명도 슬라이더
+- [x] `SilhouettePainter`: 윤곽선은 Catmull-Rom 곡선 + 글로우 + 옅은 채움, 캡션·테두리에 잘린 직선 구간 제외. 윤곽선 없는 프리셋은 관절 기반 볼륨 마네킹 + 투명도 슬라이더
+- [x] 렌즈 전환 수정 (`setDescription`으로 렌즈만 교체)
 - [ ] 투명도 값 저장 (고도화)
 - [ ] 갤러리 사진 → 커스텀 실루엣 (보상형 광고 게이트)
 
 ### M4. 스마트 디렉팅 (PRD Step 4)
-- [ ] `AttitudeService` + 자세계 위젯
+- [x] 가속도계 자세(pitch/roll, 저역 통과) + 중앙 자세계 + 목표 각도 안내 문구 + 일치 시 초록색·햅틱 (히스테리시스, 폰을 눕히면 세우라는 안내)
 - [ ] `PoseMatcher` + 단위 테스트
 - [ ] Perfect Match 피드백 (색상, 배너, 햅틱)
 

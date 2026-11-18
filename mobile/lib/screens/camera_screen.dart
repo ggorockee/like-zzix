@@ -10,7 +10,13 @@ import '../models/preset.dart';
 import '../providers/camera_providers.dart';
 import '../providers/preset_providers.dart';
 import '../services/capture_service.dart';
+import '../providers/attitude_providers.dart';
+import '../widgets/angle_indicator.dart';
 import '../widgets/camera_preview_fullscreen.dart';
+import '../widgets/frame_guide.dart';
+import '../widgets/guide_card.dart';
+import '../widgets/reference_image.dart';
+import '../widgets/reference_pip.dart';
 import '../widgets/opacity_slider.dart';
 import '../widgets/preset_bottom_sheet.dart';
 import '../widgets/shutter_button.dart';
@@ -32,6 +38,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   CameraLensDirection _lens = CameraLensDirection.back;
   _CameraIssue _issue = _CameraIssue.none;
   bool _capturing = false;
+  bool _switching = false;
   bool _flash = false;
 
   /// 앱이 포그라운드인지. 권한 팝업 등으로 inactive일 때 열린 카메라는 바로 닫는다.
@@ -124,12 +131,33 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     await old?.dispose();
   }
 
+  /// 전면/후면 전환. 컨트롤러를 새로 만들지 않고 렌즈만 교체한다
+  /// (기존 카메라를 연 채로 새 컨트롤러를 열면 기기에서 무시되는 문제).
   Future<void> _switchLens() async {
-    if (_opening != null) return;
-    _lens = _lens == CameraLensDirection.back
+    final controller = _controller;
+    if (controller == null || _opening != null || _switching) return;
+    final target = _lens == CameraLensDirection.back
         ? CameraLensDirection.front
         : CameraLensDirection.back;
-    await _startCamera();
+    final cameras = await ref.read(availableCamerasProvider.future);
+    final description = cameras
+        .where((c) => c.lensDirection == target)
+        .firstOrNull;
+    if (description == null || !mounted) return;
+
+    setState(() => _switching = true);
+    try {
+      await controller.setDescription(description);
+      _lens = target;
+    } on CameraException catch (e) {
+      debugPrint('[Camera] 렌즈 교체 실패, 다시 열기: ${e.code}');
+      _lens = target;
+      if (mounted) setState(() => _controller = null);
+      await controller.dispose();
+      await _startCamera();
+    } finally {
+      if (mounted) setState(() => _switching = false);
+    }
   }
 
   Future<void> _capture() async {
@@ -174,6 +202,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     final preset = ref.watch(selectedPresetProvider);
     final opacity = ref.watch(overlayOpacityProvider);
     final cameras = ref.watch(availableCamerasProvider).value ?? const [];
+    final hasBothLenses =
+        cameras.any((c) => c.lensDirection == CameraLensDirection.back) &&
+        cameras.any((c) => c.lensDirection == CameraLensDirection.front);
     final controller = _controller;
 
     return Scaffold(
@@ -185,22 +216,29 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                 ? CameraPreviewFullscreen(controller: controller)
                 : _CameraFallback(issue: _issue, onRetry: _startCamera),
           ),
-          if (preset != null)
+          if (preset != null) ...[
+            Positioned.fill(
+              child: IgnorePointer(
+                child: CustomPaint(
+                  painter: FrameGuidePainter(aspectRatio: preset.aspectRatio),
+                ),
+              ),
+            ),
             Positioned.fill(
               child: IgnorePointer(
                 child: Opacity(
                   opacity: opacity,
                   child: CustomPaint(
                     painter: SilhouettePainter(
-                      landmarks: preset.landmarks,
-                      aspectRatio: preset.aspectRatio,
+                      preset: preset,
                       color: Colors.white,
-                      strokeWidth: 3.5,
                     ),
                   ),
                 ),
               ),
             ),
+          ],
+          const Center(child: _AngleIndicatorLayer()),
           Positioned.fill(
             child: IgnorePointer(
               child: AnimatedOpacity(
@@ -222,12 +260,14 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                         .set,
                   ),
                 const Spacer(),
+                _AngleStatusLayer(hasPreset: preset != null),
+                const SizedBox(height: 16),
                 _BottomControls(
                   preset: preset,
                   capturing: _capturing,
                   onPresetTap: () => showPresetBottomSheet(context),
-                  onShutter: controller == null ? null : _capture,
-                  onSwitchLens: cameras.length > 1 && !_capturing
+                  onShutter: controller == null || _switching ? null : _capture,
+                  onSwitchLens: hasBothLenses && !_capturing && !_switching
                       ? _switchLens
                       : null,
                 ),
@@ -237,6 +277,33 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
         ],
       ),
     );
+  }
+}
+
+/// 자세계는 센서 주기로 다시 그려지므로 카메라 화면 전체와 분리.
+class _AngleIndicatorLayer extends ConsumerWidget {
+  const _AngleIndicatorLayer();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final guide = ref.watch(angleGuideProvider);
+    return guide == null
+        ? const SizedBox.shrink()
+        : AngleIndicator(guide: guide);
+  }
+}
+
+class _AngleStatusLayer extends ConsumerWidget {
+  const _AngleStatusLayer({required this.hasPreset});
+
+  final bool hasPreset;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final guide = ref.watch(angleGuideProvider);
+    return guide == null
+        ? const SizedBox(height: 36)
+        : AngleStatus(guide: guide, hasPreset: hasPreset);
   }
 }
 
@@ -254,23 +321,21 @@ class _TopPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-      child: Column(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          OpacitySlider(value: opacity, onChanged: onOpacityChanged),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.black45,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              '${preset.title} · ${preset.tip}',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall,
+          Expanded(
+            child: Column(
+              children: [
+                OpacitySlider(value: opacity, onChanged: onOpacityChanged),
+                const SizedBox(height: 8),
+                GuideCard(preset: preset),
+              ],
             ),
           ),
+          const SizedBox(width: 10),
+          ReferencePip(preset: preset),
         ],
       ),
     );
@@ -329,7 +394,7 @@ class _PresetThumbButton extends StatelessWidget {
         child: Container(
           width: 56,
           height: 56,
-          padding: const EdgeInsets.all(4),
+          padding: const EdgeInsets.all(3),
           decoration: BoxDecoration(
             color: Colors.black45,
             borderRadius: BorderRadius.circular(14),
@@ -340,14 +405,9 @@ class _PresetThumbButton extends StatelessWidget {
           ),
           child: preset == null
               ? const Icon(Icons.grid_view_rounded)
-              : CustomPaint(
-                  painter: SilhouettePainter(
-                    landmarks: preset.landmarks,
-                    aspectRatio: preset.aspectRatio,
-                    color: Colors.white,
-                    strokeWidth: 1.2,
-                    dashed: false,
-                  ),
+              : ClipRRect(
+                  borderRadius: BorderRadius.circular(9),
+                  child: ReferenceImage(preset: preset, silhouetteStroke: 1),
                 ),
         ),
       ),

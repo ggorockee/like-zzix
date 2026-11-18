@@ -36,7 +36,7 @@
 | 5 | **SNS 로그인은 선택 사항** (카카오/Google/Apple). 사람 단위로 `is_staff`/`is_superuser`를 부여하고, 둘 중 하나라도 true면 광고 전부 OFF | 운영진·지인을 사람 단위로 구분해 광고 면제. 로그인 없이도 촬영 기능 전부 사용 가능 (Apple 5.1.1) | 계정 없음(초기안), 관계자 전용 이메일 로그인 |
 | 7 | 인증은 **Go 서버가 직접 발급** (access JWT 15분 + refresh 30일 회전). SNS 토큰은 서버에서 검증: Google ID 토큰 `aud`, Kakao `app_id`, Apple 서명·`aud`·`nonce` | 사용자/역할의 단일 진실 공급원을 Go DB로 유지, Firebase Auth는 카카오 미지원(커스텀 토큰 필요), reviewmaps와 같은 구조. reviewmaps의 Google access token 방식은 다른 앱 토큰 재사용이 가능해 ID 토큰으로 강화 | Firebase Auth + custom claims |
 | 8 | 관리자 콘솔은 **Python/Django 없이 Nuxt SPA + Go Admin API**. 로그인은 Google 로그인 후 `is_superuser`만 허용, HttpOnly 세션 쿠키 | 비밀번호 저장·유출 위험 없음, 앱과 같은 `users` 테이블로 역할 관리, 백엔드 언어 1개 유지 (reviewmaps의 Django admin은 별도 런타임·속도 문제) | Django admin, 별도 관리자 비밀번호 계정 |
-| 6 | 프리셋 이미지는 **자체 촬영/라이선스 확보 이미지만** 사용 | `claudedocs/images/`의 참고 이미지는 인스타그램 게시물(타인 저작물·초상)로 배포 불가 | 실루엣 라인 드로잉만 배포 |
+| 6 | 프리셋 이미지는 **자체 촬영/라이선스 확보 이미지만** 사용 | `claudedocs/images/`의 참고 이미지는 인스타그램 게시물(타인 저작물·초상)로 배포 불가. 프로토타입에서는 로컬 빌드에만 넣고(git 제외), 저장소에는 추출한 포즈 좌표·윤곽선만 포함. 출시 전 교체 | 실루엣 라인 드로잉만 배포 |
 
 ## 4. web/admin 프레임워크 선택 근거
 
