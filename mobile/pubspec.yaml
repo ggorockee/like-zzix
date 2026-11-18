@@ -44,6 +44,7 @@ dependencies:
   camera: ^0.12.2
   gal: ^3.0.1
   sensors_plus: ^7.1.1
+  google_mlkit_pose_detection: ^1.0.3
 dev_dependencies:
   flutter_test:
     sdk: flutter

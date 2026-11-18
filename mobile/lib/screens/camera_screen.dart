@@ -10,19 +10,24 @@ import '../models/preset.dart';
 import '../providers/camera_providers.dart';
 import '../providers/preset_providers.dart';
 import '../services/capture_service.dart';
+import '../models/preview_transform.dart';
 import '../providers/attitude_providers.dart';
+import '../providers/pose_providers.dart';
+import '../services/pose_service.dart';
 import '../widgets/angle_indicator.dart';
 import '../widgets/camera_preview_fullscreen.dart';
 import '../widgets/frame_guide.dart';
 import '../widgets/guide_card.dart';
-import '../widgets/reference_image.dart';
-import '../widgets/reference_pip.dart';
+import '../widgets/guide_status.dart';
 import '../widgets/opacity_slider.dart';
 import '../widgets/preset_bottom_sheet.dart';
+import '../widgets/reference_image.dart';
+import '../widgets/reference_overlay.dart';
+import '../widgets/reference_pip.dart';
 import '../widgets/shutter_button.dart';
 import '../widgets/silhouette_painter.dart';
 
-/// 메인 카메라 화면 (PRD Step 2): 풀스크린 프리뷰 + 실루엣 오버레이 + 촬영 컨트롤.
+/// 메인 카메라 화면: 풀스크린 프리뷰 + 레퍼런스 오버레이 + 실시간 구도 판정 + 촬영 컨트롤.
 class CameraScreen extends ConsumerStatefulWidget {
   const CameraScreen({super.key});
 
@@ -47,6 +52,13 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   /// 진행 중인 카메라 열기 작업 (동시에 두 번 열지 않도록 직렬화).
   Future<void>? _opening;
 
+  /// 실시간 포즈 인식 (프리셋을 골랐을 때만 이미지 스트림 실행)
+  final _pose = PoseService();
+  bool _streaming = false;
+
+  /// 프레임 좌표 변환에 쓰는 마지막 화면 크기
+  Size _screenSize = Size.zero;
+
   @override
   void initState() {
     super.initState();
@@ -58,6 +70,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     unawaited(_controller?.dispose());
+    unawaited(_pose.close());
     super.dispose();
   }
 
@@ -70,6 +83,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
         _foreground = false;
         final controller = _controller;
         if (controller == null) return;
+        _streaming = false;
         setState(() => _controller = null);
         unawaited(controller.dispose());
       case AppLifecycleState.resumed:
@@ -103,6 +117,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       description,
       ResolutionPreset.high,
       enableAudio: false,
+      imageFormatGroup: PoseService.imageFormatGroup,
     );
     try {
       await controller.initialize();
@@ -123,12 +138,88 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       return;
     }
     final old = _controller;
+    _streaming = false;
     setState(() {
       _controller = controller;
       _lens = description.lensDirection;
       _issue = _CameraIssue.none;
     });
     await old?.dispose();
+    await _syncPoseStream();
+  }
+
+  // ---------------------------------------------------------------------------
+  // 실시간 포즈 인식
+  // ---------------------------------------------------------------------------
+
+  /// 프리셋이 있고 카메라가 준비됐으면 이미지 스트림을 켜고, 아니면 끈다.
+  Future<void> _syncPoseStream() async {
+    final controller = _controller;
+    final want =
+        controller != null &&
+        controller.value.isInitialized &&
+        _foreground &&
+        !_capturing &&
+        !_switching &&
+        ref.read(selectedPresetProvider) != null;
+    if (want == _streaming || controller == null) return;
+    try {
+      if (want) {
+        await controller.startImageStream(_onCameraImage);
+        _streaming = true;
+      } else {
+        _streaming = false;
+        if (controller.value.isStreamingImages) {
+          await controller.stopImageStream();
+        }
+        ref.read(poseMatchProvider.notifier).clear();
+      }
+    } on CameraException catch (e) {
+      debugPrint('[Pose] 이미지 스트림 전환 실패: ${e.code}');
+    }
+  }
+
+  Future<void> _pauseStream() async {
+    final controller = _controller;
+    if (!_streaming || controller == null) return;
+    _streaming = false;
+    try {
+      await controller.stopImageStream();
+    } on CameraException catch (e) {
+      debugPrint('[Pose] 스트림 중지 실패: ${e.code}');
+    }
+  }
+
+  Future<void> _onCameraImage(CameraImage image) async {
+    final controller = _controller;
+    if (controller == null) return;
+    final frame = await _pose.process(image, controller.description);
+    final preset = ref.read(selectedPresetProvider);
+    final previewSize = controller.value.previewSize;
+    if (frame == null ||
+        !mounted ||
+        !_streaming ||
+        preset == null ||
+        previewSize == null ||
+        _screenSize.isEmpty) {
+      return;
+    }
+    final transform = PreviewTransform(
+      screen: _screenSize,
+      // previewSize는 센서 기준(가로)이므로 세로 화면 비율은 높이/너비
+      previewAspect: previewSize.height / previewSize.width,
+      frame: SilhouettePainter.frameRect(_screenSize, preset.aspectRatio),
+    );
+    final live = frame.landmarks == null
+        ? null
+        : [
+            for (final l in frame.landmarks!)
+              () {
+                final f = transform.toFrame(Offset(l.x, l.y));
+                return PoseLandmark(f.dx, f.dy, l.likelihood);
+              }(),
+          ];
+    ref.read(poseMatchProvider.notifier).update(live);
   }
 
   /// 전면/후면 전환. 컨트롤러를 새로 만들지 않고 렌즈만 교체한다
@@ -146,6 +237,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     if (description == null || !mounted) return;
 
     setState(() => _switching = true);
+    await _pauseStream();
     try {
       await controller.setDescription(description);
       _lens = target;
@@ -157,6 +249,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       await _startCamera();
     } finally {
       if (mounted) setState(() => _switching = false);
+      await _syncPoseStream();
     }
   }
 
@@ -175,6 +268,8 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     });
 
     final messenger = ScaffoldMessenger.of(context);
+    // 일부 Android 기기는 이미지 스트림과 촬영을 동시에 못 하므로 잠시 멈춤
+    await _pauseStream();
     try {
       final photo = await controller.takePicture();
       final result = await ref
@@ -194,6 +289,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       messenger.showSnackBar(SnackBar(content: Text('촬영에 실패했어요 (${e.code})')));
     } finally {
       if (mounted) setState(() => _capturing = false);
+      await _syncPoseStream();
     }
   }
 
@@ -206,6 +302,8 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
         cameras.any((c) => c.lensDirection == CameraLensDirection.back) &&
         cameras.any((c) => c.lensDirection == CameraLensDirection.front);
     final controller = _controller;
+    _screenSize = MediaQuery.sizeOf(context);
+    ref.listen(selectedPresetProvider, (_, _) => unawaited(_syncPoseStream()));
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -225,20 +323,14 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
               ),
             ),
             Positioned.fill(
-              child: IgnorePointer(
-                child: Opacity(
-                  opacity: opacity,
-                  child: CustomPaint(
-                    painter: SilhouettePainter(
-                      preset: preset,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ),
+              child: _ReferenceOverlayLayer(preset: preset, opacity: opacity),
             ),
           ],
           const Center(child: _AngleIndicatorLayer()),
+          const Align(
+            alignment: Alignment(0, -0.2),
+            child: _PerfectBannerLayer(),
+          ),
           Positioned.fill(
             child: IgnorePointer(
               child: AnimatedOpacity(
@@ -260,7 +352,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                         .set,
                   ),
                 const Spacer(),
-                _AngleStatusLayer(hasPreset: preset != null),
+                _GuideStatusLayer(hasPreset: preset != null),
                 const SizedBox(height: 16),
                 _BottomControls(
                   preset: preset,
@@ -293,17 +385,50 @@ class _AngleIndicatorLayer extends ConsumerWidget {
   }
 }
 
-class _AngleStatusLayer extends ConsumerWidget {
-  const _AngleStatusLayer({required this.hasPreset});
+/// 하단 안내 문구 (각도 + 구도). 센서·포즈 주기로 갱신되므로 분리.
+class _GuideStatusLayer extends ConsumerWidget {
+  const _GuideStatusLayer({required this.hasPreset});
 
   final bool hasPreset;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final guide = ref.watch(angleGuideProvider);
-    return guide == null
-        ? const SizedBox(height: 36)
-        : AngleStatus(guide: guide, hasPreset: hasPreset);
+    return GuideStatus(
+      angle: ref.watch(angleGuideProvider),
+      pose: ref.watch(poseMatchProvider),
+      hasPreset: hasPreset,
+    );
+  }
+}
+
+class _PerfectBannerLayer extends ConsumerWidget {
+  const _PerfectBannerLayer();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final perfect = ref.watch(
+      poseMatchProvider.select((s) => s?.perfect ?? false),
+    );
+    return PerfectMatchBanner(visible: perfect);
+  }
+}
+
+class _ReferenceOverlayLayer extends ConsumerWidget {
+  const _ReferenceOverlayLayer({required this.preset, required this.opacity});
+
+  final Preset preset;
+  final double opacity;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final match = ref.watch(poseMatchProvider);
+    return ReferenceOverlay(
+      preset: preset,
+      opacity: opacity,
+      match: match?.result,
+      live: match?.live,
+      perfect: match?.perfect ?? false,
+    );
   }
 }
 

@@ -10,24 +10,30 @@ class ReferenceImage extends StatelessWidget {
     required this.preset,
     this.fit = BoxFit.cover,
     this.silhouetteStroke = 1.6,
+    this.showFallback = true,
   });
 
   final Preset preset;
   final BoxFit fit;
   final double silhouetteStroke;
 
+  /// 사진이 없을 때 실루엣으로 대체할지 (오버레이처럼 외곽선을 따로 그리는 곳은 false)
+  final bool showFallback;
+
   @override
   Widget build(BuildContext context) {
-    final fallback = CustomPaint(
-      size: Size.infinite,
-      painter: SilhouettePainter(
-        preset: preset,
-        color: Colors.white,
-        strokeWidth: silhouetteStroke,
-        glow: false,
-        fillOpacity: 0.15,
-      ),
-    );
+    final Widget fallback = !showFallback
+        ? const SizedBox.shrink()
+        : CustomPaint(
+            size: Size.infinite,
+            painter: SilhouettePainter(
+              preset: preset,
+              color: Colors.white,
+              strokeWidth: silhouetteStroke,
+              glow: false,
+              fillOpacity: 0.15,
+            ),
+          );
     final asset = preset.referenceAsset;
     if (asset == null) return fallback;
     return Image.asset(

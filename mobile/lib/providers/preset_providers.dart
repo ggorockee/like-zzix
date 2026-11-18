@@ -27,7 +27,7 @@ class SelectedPresetNotifier extends Notifier<Preset?> {
   void clear() => state = null;
 }
 
-/// 실루엣 투명도 (0.1~1.0).
+/// 레퍼런스 사진 오버레이 투명도 (0.1~1.0, 기본 40%).
 final overlayOpacityProvider = NotifierProvider<OverlayOpacityNotifier, double>(
   OverlayOpacityNotifier.new,
 );
@@ -37,7 +37,7 @@ class OverlayOpacityNotifier extends Notifier<double> {
   static const max = 1.0;
 
   @override
-  double build() => 0.7;
+  double build() => 0.4;
 
   void set(double value) => state = value.clamp(min, max);
 }
