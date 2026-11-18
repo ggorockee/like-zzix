@@ -22,4 +22,13 @@ class CaptureService {
           : SaveResult.failed;
     }
   }
+
+  /// 기기 기본 갤러리 앱 열기.
+  Future<void> openGallery() async {
+    try {
+      await Gal.open();
+    } on Object catch (e) {
+      debugPrint('[Capture] 갤러리 열기 실패: $e');
+    }
+  }
 }

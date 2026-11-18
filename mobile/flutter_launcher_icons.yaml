@@ -1,0 +1,11 @@
+# 앱 아이콘 생성: dart run flutter_launcher_icons
+# 원본 이미지는 tool/generate_branding.dart로 생성 (LogoMarkPainter)
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/branding/icon.png"
+  remove_alpha_ios: true
+  adaptive_icon_background: "assets/branding/icon_background.png"
+  adaptive_icon_foreground: "assets/branding/icon_foreground.png"
+  adaptive_icon_monochrome: "assets/branding/icon_foreground.png"
+  min_sdk_android: 24

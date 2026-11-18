@@ -93,8 +93,8 @@ class GuideStatus extends StatelessWidget {
     if (angle != null && !angle.matched) return angleMessage();
 
     return switch (result.hint) {
-      PoseHint.stepCloser => (Icons.zoom_in, '한 걸음 다가가세요', GuideTone.neutral),
-      PoseHint.stepBack => (Icons.zoom_out, '한 걸음 물러나세요', GuideTone.neutral),
+      PoseHint.stepCloser => (Icons.zoom_in, '다가가거나 줌을 올려요', GuideTone.neutral),
+      PoseHint.stepBack => (Icons.zoom_out, '물러나거나 줌을 내려요', GuideTone.neutral),
       PoseHint.panRight => (
         Icons.arrow_forward,
         '카메라를 오른쪽으로 살짝',

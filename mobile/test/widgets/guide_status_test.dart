@@ -65,7 +65,7 @@ void main() {
   });
 
   test('각도가 맞으면 위치·포즈 안내', () {
-    expect(text(angle(), pose(PoseHint.stepCloser)), '한 걸음 다가가세요');
+    expect(text(angle(), pose(PoseHint.stepCloser)), '다가가거나 줌을 올려요');
     expect(text(angle(), pose(PoseHint.lowerPhone)), '폰 높이를 조금 낮춰요');
     expect(
       text(angle(), pose(PoseHint.adjustPose, error: 0.25)),

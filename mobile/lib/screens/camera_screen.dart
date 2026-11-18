@@ -11,12 +11,14 @@ import '../providers/camera_providers.dart';
 import '../providers/preset_providers.dart';
 import '../services/capture_service.dart';
 import '../models/preview_transform.dart';
+import '../models/zoom_range.dart';
 import '../providers/attitude_providers.dart';
 import '../providers/pose_providers.dart';
 import '../services/pose_service.dart';
 import '../widgets/angle_indicator.dart';
 import '../widgets/camera_preview_fullscreen.dart';
 import '../widgets/frame_guide.dart';
+import '../widgets/gallery_button.dart';
 import '../widgets/guide_card.dart';
 import '../widgets/guide_status.dart';
 import '../widgets/opacity_slider.dart';
@@ -26,6 +28,7 @@ import '../widgets/reference_overlay.dart';
 import '../widgets/reference_pip.dart';
 import '../widgets/shutter_button.dart';
 import '../widgets/silhouette_painter.dart';
+import '../widgets/zoom_selector.dart';
 
 /// 메인 카메라 화면: 풀스크린 프리뷰 + 레퍼런스 오버레이 + 실시간 구도 판정 + 촬영 컨트롤.
 class CameraScreen extends ConsumerStatefulWidget {
@@ -58,6 +61,14 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
 
   /// 프레임 좌표 변환에 쓰는 마지막 화면 크기
   Size _screenSize = Size.zero;
+
+  /// 줌 (기기 지원 범위 ∩ 0.5~3배)
+  ZoomRange _zoomRange = ZoomRange.none;
+  double _zoom = 1;
+  double _pinchStartZoom = 1;
+
+  /// 이번 세션에 마지막으로 찍은 사진 (갤러리 버튼 썸네일)
+  String? _lastPhotoPath;
 
   @override
   void initState() {
@@ -137,16 +148,57 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       await controller.dispose();
       return;
     }
+    final zoomRange = await _readZoomRange(controller);
     final old = _controller;
     _streaming = false;
     setState(() {
       _controller = controller;
       _lens = description.lensDirection;
       _issue = _CameraIssue.none;
+      _zoomRange = zoomRange;
+      _zoom = zoomRange.clamp(1);
     });
     await old?.dispose();
+    await _applyZoom(controller);
     await _syncPoseStream();
   }
+
+  // ---------------------------------------------------------------------------
+  // 줌
+  // ---------------------------------------------------------------------------
+
+  Future<ZoomRange> _readZoomRange(CameraController controller) async {
+    try {
+      final range = ZoomRange.fromDevice(
+        await controller.getMinZoomLevel(),
+        await controller.getMaxZoomLevel(),
+      );
+      debugPrint(
+        '[Camera] ${controller.description.name} 줌 ${range.min}~${range.max}',
+      );
+      return range;
+    } on CameraException {
+      return ZoomRange.none;
+    }
+  }
+
+  Future<void> _applyZoom(CameraController controller) async {
+    try {
+      await controller.setZoomLevel(_zoom);
+    } on CameraException catch (e) {
+      debugPrint('[Camera] 줌 설정 실패: ${e.code}');
+    }
+  }
+
+  void _setZoom(double level) {
+    final controller = _controller;
+    final next = _zoomRange.clamp(level);
+    if (controller == null || (next - _zoom).abs() < 0.01) return;
+    setState(() => _zoom = next);
+    unawaited(_applyZoom(controller));
+  }
+
+  Future<void> _openGallery() => ref.read(captureServiceProvider).openGallery();
 
   // ---------------------------------------------------------------------------
   // 실시간 포즈 인식
@@ -241,6 +293,14 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     try {
       await controller.setDescription(description);
       _lens = target;
+      final range = await _readZoomRange(controller);
+      if (mounted) {
+        setState(() {
+          _zoomRange = range;
+          _zoom = range.clamp(1);
+        });
+      }
+      await _applyZoom(controller);
     } on CameraException catch (e) {
       debugPrint('[Camera] 렌즈 교체 실패, 다시 열기: ${e.code}');
       _lens = target;
@@ -275,6 +335,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       final result = await ref
           .read(captureServiceProvider)
           .saveToGallery(photo.path);
+      if (result == SaveResult.saved && mounted) {
+        setState(() => _lastPhotoPath = photo.path);
+      }
       messenger.showSnackBar(
         SnackBar(
           content: Text(switch (result) {
@@ -282,7 +345,10 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
             SaveResult.permissionDenied => '사진 저장 권한을 허용해 주세요',
             SaveResult.failed => '사진을 저장하지 못했어요',
           }),
-          duration: const Duration(seconds: 2),
+          action: result == SaveResult.saved
+              ? SnackBarAction(label: '보기', onPressed: _openGallery)
+              : null,
+          duration: const Duration(seconds: 3),
         ),
       );
     } on CameraException catch (e) {
@@ -311,7 +377,17 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
         children: [
           Positioned.fill(
             child: controller != null
-                ? CameraPreviewFullscreen(controller: controller)
+                ? GestureDetector(
+                    // 두 손가락 핀치 줌
+                    behavior: HitTestBehavior.opaque,
+                    onScaleStart: (_) => _pinchStartZoom = _zoom,
+                    onScaleUpdate: (d) {
+                      if (d.pointerCount >= 2) {
+                        _setZoom(_pinchStartZoom * d.scale);
+                      }
+                    },
+                    child: CameraPreviewFullscreen(controller: controller),
+                  )
                 : _CameraFallback(issue: _issue, onRetry: _startCamera),
           ),
           if (preset != null) ...[
@@ -353,8 +429,17 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                   ),
                 const Spacer(),
                 _GuideStatusLayer(hasPreset: preset != null),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
+                if (controller != null)
+                  ZoomSelector(
+                    range: _zoomRange,
+                    zoom: _zoom,
+                    onSelected: _setZoom,
+                  ),
+                const SizedBox(height: 14),
                 _BottomControls(
+                  lastPhotoPath: _lastPhotoPath,
+                  onGalleryTap: _openGallery,
                   preset: preset,
                   capturing: _capturing,
                   onPresetTap: () => showPresetBottomSheet(context),
@@ -469,6 +554,8 @@ class _TopPanel extends StatelessWidget {
 
 class _BottomControls extends StatelessWidget {
   const _BottomControls({
+    required this.lastPhotoPath,
+    required this.onGalleryTap,
     required this.preset,
     required this.capturing,
     required this.onPresetTap,
@@ -476,6 +563,8 @@ class _BottomControls extends StatelessWidget {
     required this.onSwitchLens,
   });
 
+  final String? lastPhotoPath;
+  final VoidCallback onGalleryTap;
   final Preset? preset;
   final bool capturing;
   final VoidCallback onPresetTap;
@@ -484,17 +573,32 @@ class _BottomControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 셔터는 항상 가운데: 왼쪽(갤러리·프리셋)과 오른쪽(렌즈)을 같은 폭으로
     return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 0, 28, 24),
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          _PresetThumbButton(preset: preset, onTap: onPresetTap),
+          Expanded(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                GalleryButton(
+                  lastPhotoPath: lastPhotoPath,
+                  onTap: onGalleryTap,
+                ),
+                _PresetThumbButton(preset: preset, onTap: onPresetTap),
+              ],
+            ),
+          ),
           ShutterButton(onPressed: onShutter, busy: capturing),
-          _RoundIconButton(
-            icon: Icons.cameraswitch_outlined,
-            tooltip: '렌즈 전환',
-            onPressed: onSwitchLens,
+          Expanded(
+            child: Center(
+              child: _RoundIconButton(
+                icon: Icons.cameraswitch_outlined,
+                tooltip: '렌즈 전환',
+                onPressed: onSwitchLens,
+              ),
+            ),
           ),
         ],
       ),

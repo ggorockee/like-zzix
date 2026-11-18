@@ -4,12 +4,18 @@ import 'package:go_router/go_router.dart';
 
 import 'core/app_theme.dart';
 import 'screens/camera_screen.dart';
+import 'screens/splash_screen.dart';
 
 /// 앱(ProviderScope)마다 라우터를 새로 만든다.
 /// 전역 GoRouter는 위젯 트리가 다시 만들어져도 이전 이동 기록이 남는다.
 final routerProvider = Provider<GoRouter>((ref) {
   final router = GoRouter(
+    initialLocation: '/splash',
     routes: [
+      GoRoute(
+        path: '/splash',
+        builder: (context, state) => const SplashScreen(),
+      ),
       GoRoute(path: '/', builder: (context, state) => const CameraScreen()),
     ],
   );
