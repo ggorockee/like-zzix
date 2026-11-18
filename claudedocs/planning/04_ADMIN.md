@@ -64,7 +64,7 @@
 | `app/composables/usePoseExtractor.ts` | MediaPipe 지연 로딩(처음 한 번), 관절·마스크 추출 |
 | `app/utils/outline.ts` | 마스크 → 가장 큰 영역 → 경계 추적 → 단순화된 외곽선 (vitest) |
 | `app/utils/image.ts`, `app/utils/preset.ts` | 사진 축소, 프리셋 타입·검증 |
-| `Dockerfile`, `nginx.conf` | `nuxi generate` → nginx(비루트, 읽기 전용 루트), `/healthz`, SPA 폴백 |
+| `Dockerfile`, `nginx.conf` | `nuxi generate` → nginx(비루트, 읽기 전용 루트), `/healthz`, SPA 폴백. `absolute_redirect off` + `$uri/index.html`로 `/login` 직접 접속 시 내부 포트(:8080) 리다이렉트 방지 |
 
 ## 6. 로컬 실행
 
@@ -98,5 +98,5 @@
 ### A4. 배포
 - [x] Dockerfile / nginx / CI(`ci-admin.yml`: 검사 → 이미지 → infra `admin.image.tag` PR)
 - [x] infra: Terraform DB·사용자, ExternalSecret, 관리자 Deployment·Service, VirtualService, blackbox, 대시보드·알림
-- [ ] GSM `prod-like-zzix-credentials` 생성 (개발자 승인 후)
-- [ ] OAuth 웹 클라이언트(yanggo-514212)에 승인된 JS 출처 `https://like-zzix-admin.woohalabs.com` 추가 (개발자 승인 후)
+- [x] GSM `prod-like-zzix-credentials` 생성 (2026-11-19 확인: ExternalSecret `SecretSynced`, DB·ADMIN_EMAILS·GOOGLE_CLIENT_ID 주입)
+- [ ] OAuth 웹 클라이언트(yanggo-514212, woohalabs11 계정)에 승인된 JS 출처 `https://like-zzix-admin.woohalabs.com` 추가 — 2026-11-19 확인: 미등록이라 Google 로그인 버튼이 403 `The given origin is not allowed for the given client ID` → 로그인 불가

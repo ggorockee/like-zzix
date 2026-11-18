@@ -72,8 +72,8 @@
 | M3·M4 | 레퍼런스 오버레이, ML Kit 실시간 포즈 매칭, 각도 가이드, Perfect Match | [x] |
 | M5 | 무음/크롭, 전면 광고, 설정 화면 | [ ] |
 | S1·S3 | server 프리셋 API·앱 이벤트 지표, Docker/K8s 배포, 대시보드·알림 (`02_SERVER.md`, `06_OPERATIONS.md`) | [x] |
-| S2 | admin API (DB 도입) | [ ] |
-| A1~A3 | admin 로그인, 프리셋 CRUD, 포즈 추출 (`04_ADMIN.md`) | [ ] |
+| S2 | admin API (DB 도입). 사용자 관리는 S1.5 이후 | [x] |
+| A1~A3 | admin 로그인, 프리셋 CRUD, 포즈 추출 (`04_ADMIN.md`). 운영 배포 완료, OAuth JS 출처 등록·보강 항목(드래그 정렬 등)은 `04_ADMIN.md` | [x] |
 | W1~W2 | web 랜딩, 정책 페이지, 딥링크 (`03_WEB.md`) | [ ] |
 | M7·S1.5 | SNS 로그인 + `is_staff`/`is_superuser` 광고 면제 (마지막, 클라이언트는 `feature/sns-auth` 브랜치) | [ ] |
 | R1 | 스토어 심사 제출 (정책 URL은 web 완료 후 가능) | [ ] |
