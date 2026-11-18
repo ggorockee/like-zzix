@@ -30,3 +30,6 @@ mobile/firebase.json
 # 레퍼런스 원본/축소 사진 (타인 게시물·초상권, 로컬 프로토타입 빌드 전용)
 mobile/assets/presets/reference/*
 !mobile/assets/presets/reference/.gitkeep
+
+# 브라우저 자동화 스냅샷·스크린샷 (참고 사진이 찍힐 수 있음)
+.playwright-mcp/

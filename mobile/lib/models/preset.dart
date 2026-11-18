@@ -74,6 +74,7 @@ class Preset {
     this.guide = const [],
     this.outline = const [],
     this.referenceAsset,
+    this.referenceUrl,
   });
 
   factory Preset.fromJson(Map<String, dynamic> json) {
@@ -109,6 +110,7 @@ class Preset {
           ),
       ],
       referenceAsset: json['reference_asset'] as String?,
+      referenceUrl: json['reference_url'] as String?,
     );
   }
 
@@ -132,6 +134,9 @@ class Preset {
 
   /// 레퍼런스 사진 asset 경로. 로컬 빌드에만 존재할 수 있으므로 없을 때를 처리해야 함.
   final String? referenceAsset;
+
+  /// 관리자 콘솔에서 올린 레퍼런스 사진 경로 (서버 기준 상대 경로, 예: /v1/presets/{id}/image?v=...).
+  final String? referenceUrl;
 
   bool get hasOutline => outline.length >= 3;
 

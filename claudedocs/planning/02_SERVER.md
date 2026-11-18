@@ -2,14 +2,16 @@
 
 > 기준: Go 1.26 / Fiber v2 · 원칙: **백엔드는 Go만 사용**, **모니터링되지 않는 것은 관리될 수 없다**
 
-## 0. 현재 구현 상태 (2026-11-18, S1 MVP 배포 완료)
+## 0. 현재 구현 상태 (2026-11-19, S1 배포 완료 · S2 관리자 API 구현)
 
-운영 중인 yen-back 서버와 같은 구조로 먼저 배포하고, DB·관리자 API는 admin 단계에서 추가한다. 아래 1~6장은 최종 목표 설계.
+운영 중인 yen-back 서버와 같은 구조로 먼저 배포했고, 2026-11-19 관리자 콘솔용 DB·관리자 API를 추가했다. 아래 1~6장 중 앱 인증(S1.5)·사용자 관리는 아직 목표 설계.
 
 | 항목 | 현재 | 최종 목표 |
 |------|------|-----------|
 | 프레임워크 | Fiber v2 (yen-back과 동일, 운영 검증된 adaptor·promhttp 조합) | 동일 유지 (v3 전환은 별도 검토) |
-| 프리셋 저장 | 이미지에 포함한 JSON (`internal/presets/presets.json` = 앱 번들 파일, 다르면 테스트 실패) | PostgreSQL (admin에서 등록) |
+| 프리셋 저장 | Cloud SQL `like_zzix` (`presets` 테이블: 문서 jsonb + 사진 bytea). 서버가 30초마다 공개 프리셋을 다시 읽어 메모리 카탈로그 교체. DB가 비어 있으면 이미지에 포함한 JSON 4개로 시드. DB 연결 실패 시 마지막 정상본(첫 기동이면 포함된 JSON)으로 응답 | 동일 |
+| 관리자 API | `/admin/v1` (Google ID 토큰 + `ADMIN_EMAILS` 허용 목록 → DB 세션 쿠키), 프리셋 CRUD·공개 전환·사진 업로드. 콘솔은 `04_ADMIN.md` | 사용자 관리 추가 |
+| DB 접근 | pgx v5 pool(최대 4), 내장 SQL 마이그레이션(`internal/store/migrations`, advisory lock), 저장소 인터페이스는 메모리·Postgres 두 구현이 같은 계약 테스트 통과 | sqlc 도입은 쿼리가 늘면 검토 |
 | 배포 | `https://like-zzix.woohalabs.com`, GKE `like-zzix` 네임스페이스, ArgoCD 앱 `like-zzix` | 동일 |
 | 이미지 | Docker Hub `ggorockee/like-zzix-server`, CI가 main 머지 시 빌드 → infra 태그 PR 자동 머지 | 동일 |
 
@@ -21,6 +23,13 @@
 | GET | `/v1/categories` | 프리셋이 있는 카테고리와 개수 |
 | POST | `/v1/events` | 앱 익명 사용 이벤트 묶음 (최대 40개, 허용 목록 외 거부) → 202 |
 | GET | `/privacy` | 개인정보처리방침 (web `/privacy` 전까지 스토어 등록용) |
+| GET | `/v1/presets/:id/image?v=` | 공개 프리셋의 레퍼런스 사진 (ETag, `v`가 맞으면 1년 immutable 캐시). 앱은 프리셋의 `reference_url`로 접근 |
+| GET | `/admin/v1/config` | 콘솔 설정 (Google 클라이언트 ID, 카테고리) |
+| POST | `/admin/v1/auth/google` · `/auth/logout` · GET `/me` | Google ID 토큰 → 세션 쿠키 `lzx_admin` (분당 5회 제한) |
+| GET/POST | `/admin/v1/presets` | draft 포함 목록 / 생성(항상 draft) |
+| GET/PUT/DELETE | `/admin/v1/presets/:id` | 단건 조회 / 수정 / 삭제 |
+| PATCH | `/admin/v1/presets/:id/status` | `published` ↔ `draft` |
+| GET/PUT | `/admin/v1/presets/:id/image` | 사진 조회 / 업로드 (JPEG·PNG·WebP, 1.5MB) |
 | GET | `/metrics` | 별도 포트 9090, VirtualService로 노출하지 않음 |
 
 | 지표 (`likezzix_`) | 라벨 | 용도 |
@@ -30,7 +39,12 @@
 | `app_events_total` | event, platform | 앱 실행, 프리셋 선택, Perfect Match, 저장/실패, 카메라 불가, 갤러리, 업데이트 팝업 반응 |
 | `preset_events_total` | event, preset | 촬영 퍼널 (선택 → Perfect Match → 저장), 카탈로그에 있는 프리셋만 |
 | `app_events_rejected_total` | reason | 앱·서버 허용 목록 불일치 감지 |
-| `build_info`, `presets` | version, commit | 배포 버전, 제공 프리셋 수 |
+| `build_info` | version, commit | 배포 버전 |
+| `presets` | status (published/draft) | 앱 공개·작성 중 프리셋 수 |
+| `admin_logins_total` | result (success/not_allowed/invalid_token/rate_limited) | 관리자 로그인, 거부 급증 알림 |
+| `admin_changes_total` | action (create/update/delete/publish/unpublish/image) | 관리자 변경 이력 |
+| `db_up`, `db_errors_total` | op | DB 연결(1/0, 미설정 -1), 작업별 오류 |
+| `catalog_refreshes_total`, `catalog_last_success_timestamp_seconds` | result | 30초 주기 프리셋 갱신 성공/실패, 마지막 성공 시각 |
 
 라벨 상한 원칙: 원본 경로 대신 라우트 패턴, 허용 목록에 없는 이벤트는 거부, 모르는 프리셋은 라벨로 만들지 않음, semver가 아닌 버전은 `other`.
 
@@ -148,8 +162,8 @@ Remote Config / 광고 플래그는 Firebase Console에서 관리하므로 서�
 - [x] `/v1/categories`, `/v1/presets`, `/v1/presets/:id` + ETag (임베드 JSON)
 - [x] `/v1/events` 앱 사용 이벤트 + 프리셋 퍼널 지표
 - [x] 단위·HTTP 테스트 (gofmt, vet, staticcheck, race)
-- [ ] goose 마이그레이션 + sqlc 설정 (admin 단계에서 DB 도입 시)
-- [ ] 통합 테스트 (testcontainers, DB 도입 시)
+- [x] 내장 SQL 마이그레이션 (goose 대신 advisory lock + `schema_migrations`, 의존성 최소화)
+- [x] 저장소 계약 테스트를 실제 Postgres 15로도 실행 (CI service container, `TEST_DATABASE_URL`)
 
 ### S1.5 앱 인증 (마지막 단계, mobile M7과 계약 일치)
 - [ ] `users`, `user_identities`, `refresh_tokens` 마이그레이션
@@ -159,11 +173,12 @@ Remote Config / 광고 플래그는 Firebase Console에서 관리하므로 서�
 - [ ] 최초 슈퍼계정 지정 CLI (`cmd/grant-superuser`)
 
 ### S2. 관리자 API
-- [ ] `/admin/v1/auth/google` (superuser만) + 세션 미들웨어 + rate limit
-- [ ] 사용자 검색 / 역할(`is_staff`, `is_superuser`, `is_active`) 변경
-- [ ] 프리셋 CRUD + 포즈 데이터 검증
-- [ ] presigned 업로드 URL
-- [ ] CORS: admin 도메인만 허용
+- [x] `/admin/v1/auth/google` (`ADMIN_EMAILS` 허용 목록, 요청마다 재확인) + DB 세션 + rate limit
+- [ ] 사용자 검색 / 역할(`is_staff`, `is_superuser`, `is_active`) 변경 — 앱 SNS 로그인(S1.5) 후
+- [x] 프리셋 CRUD + 포즈 데이터 검증(앱과 같은 스키마) + 공개 전환
+- [x] 사진 업로드 (presigned 대신 DB 저장, 형식 판별·1.5MB 제한, 공개 API ETag 캐시)
+- [x] CORS: admin 도메인만 허용
+- [x] 지표·대시보드 "관리자 콘솔 · DB" 행·알림 `like-zzix.admin`
 
 ### S3. 배포 (infra PR #1178)
 - [x] Dockerfile (멀티스테이지, distroless non-root, 12MB)

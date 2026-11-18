@@ -1,6 +1,6 @@
 # 운영 가이드 — 모니터링·배포·버전 관리·광고
 
-> 기준일: 2026-11-18 · 대전제: **모니터링되지 않는 것은 관리될 수 없다**
+> 기준일: 2026-11-19 · 대전제: **모니터링되지 않는 것은 관리될 수 없다**
 > 새 기능을 만들면 "어디서 보이는가(지표·대시보드)"와 "언제 알려주는가(알림)"를 함께 만든다.
 
 ## 1. 어디서 무엇을 보나
@@ -10,7 +10,8 @@
 | 서버 상태·API 지연·5xx | Grafana `라익찍스 (like-zzix)` | https://monitoring.ggorockee.com/d/like-zzix |
 | 촬영 퍼널 (프리셋 선택 → Perfect Match → 저장) | 같은 대시보드 "촬영 퍼널" 행 | 프리셋별 전환율로 판정 기준 튜닝 |
 | 앱 버전·플랫폼 분포, 업데이트 팝업 반응 | 같은 대시보드 "앱 사용 현황" 행 | 강제 업데이트 후 구버전 잔존 확인 |
-| 외부 접속 (도메인·인증서) | Grafana `cluster-overview` 서비스 접속 상태 | blackbox `like-zzix-api` |
+| 관리자 콘솔·DB·프리셋 갱신·관리자 로그인 | 같은 대시보드 "관리자 콘솔 · DB" 행 | 콘솔: https://like-zzix-admin.woohalabs.com |
+| 외부 접속 (도메인·인증서) | Grafana `cluster-overview` 서비스 접속 상태 | blackbox `like-zzix-api`, `like-zzix-admin` |
 | 배포 상태 | ArgoCD 앱 `like-zzix` | https://argocd.ggorockee.com/applications/like-zzix |
 | 앱 크래시 | Firebase Crashlytics (릴리스 빌드만) | Firebase 콘솔 > like-zzix > Crashlytics |
 | 원격 설정 값·변경 이력 | Firebase Remote Config | 콘솔 버전 기록 + git `firebase/remoteconfig.template.json` |
@@ -27,6 +28,9 @@
 | LikeZzixEventsRejected | 이벤트 거부 30분 지속 | WARN | 앱 `AppEvent`와 서버 `AllowedEvents` 불일치 |
 | LikeZzixPhotoSaveFailing | 1시간 저장 실패율 20% 초과 (5회 이상) | WARN | 앱 버전별 분포, Crashlytics |
 | LikeZzixCameraUnavailableHigh | 1시간 카메라 불가 20% 초과 (실행 5회 이상) | WARN | 최근 앱 버전 배포 여부 |
+| LikeZzixDatabaseDown | DB 연결 실패 5분 | ERROR | 서버 로그, Secret `like-zzix-credentials`, Cloud SQL 상태 (앱은 마지막 정상 프리셋으로 계속 동작) |
+| LikeZzixCatalogStale | 프리셋 갱신 10분 넘게 실패 | WARN | `likezzix_catalog_refreshes_total{result="error"}`, 서버 로그 |
+| LikeZzixAdminLoginDenied | 30분간 관리자 로그인 거부 10회 이상 | WARN | result 라벨 (허용 목록 밖 계정 / 토큰 오류 / 과도한 시도) |
 | 공통 (클러스터) | 외부 접속 실패 3분, 인증서 만료, Pod 재시작·OOM, ArgoCD 실패 | 등급별 | infra `.claude/CLAUDE.md` 알림 표 |
 
 대시보드 색상 기준과 알림 기준은 같은 값이다. 한쪽을 바꾸면 infra 저장소에서 다른 쪽도 함께 바꾼다 (`kube-prometheus-stack` valuefile `like-zzix-server` 그룹, `dashboards/like-zzix-dashboard.json`).
@@ -41,7 +45,25 @@
 | 4 | ArgoCD가 자동 sync → Grafana "배포 버전" 패널에서 새 태그 확인 |
 | 필요 시크릿 | like-zzix 저장소: `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`, `INFRA_GITHUB_TOKEN` (2026-11-18 등록 완료) |
 
-프리셋을 바꿀 때는 `mobile/assets/presets/presets.json`을 고치고 `server/internal/presets/presets.json`에 같은 내용을 복사한다. 두 파일이 다르면 서버 테스트가 실패한다.
+관리자 콘솔도 같은 방식이다: `admin/**` 변경이 main에 머지되면 `Admin CI/CD`가 lint·typecheck·test·generate → `ggorockee/like-zzix-admin` 이미지 → infra `admin.image.tag` PR 자동 머지.
+
+| 무엇을 바꿨나 | 반영 경로 |
+|------|------|
+| `server/**`, 앱 번들 프리셋 | Server CI/CD → infra `image.tag` → ArgoCD 자동 배포 |
+| `admin/**` | Admin CI/CD → infra `admin.image.tag` → ArgoCD 자동 배포 |
+| `mobile/**` (앱 코드) | infra와 무관. 스토어 빌드·심사로 배포, 강제 업데이트는 Remote Config(4장) |
+| `web/**` | 아직 배포 파이프라인 없음 (web 단계에서 추가) |
+| 프리셋 내용 | 관리자 콘솔에서 편집·공개 → 서버가 30초 안에 반영 (배포 불필요) |
+
+번들 프리셋(앱 오프라인·첫 실행용, 서버 시드용)을 바꿀 때는 `mobile/assets/presets/presets.json`을 고치고 `server/internal/presets/presets.json`에 같은 내용을 복사한다. 두 파일이 다르면 서버 테스트가 실패한다. 이미 DB에 프리셋이 있으면 시드는 다시 실행되지 않으므로 운영 프리셋은 콘솔에서 바꾼다.
+
+### 관리자 콘솔 설정 (최초 1회)
+
+| 항목 | 값 / 위치 |
+|------|------|
+| GSM `prod-like-zzix-credentials` (JSON) | POSTGRES_HOST(172.29.0.3)·PORT·USER·PASSWORD·DB(like_zzix), ADMIN_EMAILS(쉼표 구분), GOOGLE_CLIENT_ID. Terraform이 DB·사용자를 만들고 ESO가 Pod에 주입 |
+| 관리자 추가·제거 | GSM 새 버전에서 ADMIN_EMAILS 수정 → ESO 갱신(최대 1시간) 후 `kubectl -n like-zzix rollout restart deploy/like-zzix`. 목록에서 빠진 관리자는 다음 요청부터 차단 |
+| Google OAuth | yanggo-514212 웹 클라이언트(Grafana·ArgoCD와 공용)의 승인된 JavaScript 출처에 `https://like-zzix-admin.woohalabs.com` |
 
 ## 4. 앱 버전 관리 (Firebase Remote Config)
 

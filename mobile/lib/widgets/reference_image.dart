@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/env.dart';
 import '../models/preset.dart';
 import 'silhouette_painter.dart';
 
@@ -34,15 +35,33 @@ class ReferenceImage extends StatelessWidget {
               fillOpacity: 0.15,
             ),
           );
-    final asset = preset.referenceAsset;
-    if (asset == null) return fallback;
-    return Image.asset(
-      asset,
+    final Widget local = preset.referenceAsset == null
+        ? fallback
+        : Image.asset(
+            preset.referenceAsset!,
+            fit: fit,
+            // 축소본 기준으로 디코딩해 메모리 절약
+            cacheWidth: 540,
+            gaplessPlayback: true,
+            errorBuilder: (context, error, stackTrace) => fallback,
+          );
+    // 관리자 콘솔에서 올린 사진이 있으면 우선 사용, 못 받으면 번들 사진 → 실루엣
+    final url = resolveReferenceUrl(preset.referenceUrl, Env.apiBaseUrl);
+    if (url == null) return local;
+    return Image.network(
+      url,
       fit: fit,
-      // 축소본 기준으로 디코딩해 메모리 절약
       cacheWidth: 540,
       gaplessPlayback: true,
-      errorBuilder: (context, error, stackTrace) => fallback,
+      errorBuilder: (context, error, stackTrace) => local,
     );
   }
+}
+
+/// 서버가 준 상대 경로를 API 주소 기준 절대 URL로. API 주소가 없는 빌드면 null.
+String? resolveReferenceUrl(String? path, String apiBaseUrl) {
+  if (path == null || path.isEmpty) return null;
+  if (path.startsWith('http://') || path.startsWith('https://')) return path;
+  if (apiBaseUrl.isEmpty) return null;
+  return Uri.parse(apiBaseUrl).resolve(path).toString();
 }
