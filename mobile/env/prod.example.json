@@ -1,0 +1,9 @@
+{
+  "API_BASE_URL": "https://api.example.com",
+  "ADMOB_ANDROID_NATIVE": "",
+  "ADMOB_ANDROID_INTERSTITIAL": "",
+  "ADMOB_ANDROID_REWARDED": "",
+  "ADMOB_IOS_NATIVE": "",
+  "ADMOB_IOS_INTERSTITIAL": "",
+  "ADMOB_IOS_REWARDED": ""
+}

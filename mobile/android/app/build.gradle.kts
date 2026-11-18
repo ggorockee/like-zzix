@@ -1,8 +1,22 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
+    // START: FlutterFire Configuration
+    id("com.google.gms.google-services")
+    // END: FlutterFire Configuration
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+// 네이티브 설정값은 커밋하지 않는 android/local.properties에서 읽는다.
+// - admob.appId: 없으면 Google 테스트 App ID
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+val admobAppId: String =
+    localProperties.getProperty("admob.appId") ?: "ca-app-pub-3940256099942544~3347511713"
 
 android {
     namespace = "com.woohalabs.likezzix"
@@ -27,6 +41,7 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        manifestPlaceholders["admobAppId"] = admobAppId
     }
 
     buildTypes {

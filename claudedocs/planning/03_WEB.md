@@ -9,7 +9,7 @@
 | 페이지 | 목적 | 우선순위 |
 |--------|------|----------|
 | `/` 랜딩 | 앱 소개, 데모 GIF, 스토어 버튼 (ASO 보조, SEO) | 높음 |
-| `/privacy` 개인정보처리방침 | **스토어 등록 필수 URL** (AdMob, Firebase 수집 항목 명시) | 최우선 |
+| `/privacy` 개인정보처리방침 | **스토어 등록 필수 URL** (AdMob, Firebase, SNS 로그인 수집 항목·보관 기간·탈퇴 방법 명시) | 최우선 |
 | `/terms` 이용약관 | 스토어·광고 정책 대응 | 최우선 |
 | `/p/[id]` 프리셋 공유 | 앱 설치 시 딥링크로 앱 열기, 미설치 시 스토어 이동 + OG 이미지 | 중간 |
 | `/.well-known/apple-app-site-association`, `/.well-known/assetlinks.json` | iOS Universal Links / Android App Links | 중간 |

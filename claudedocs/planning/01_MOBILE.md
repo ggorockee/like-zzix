@@ -7,13 +7,14 @@
 
 | 포함 | 제외 (차후) |
 |------|-------------|
-| 풀스크린 카메라 + 셔터/렌즈 전환/프리셋 썸네일 | 회원가입·로그인 |
+| 풀스크린 카메라 + 셔터/렌즈 전환/프리셋 썸네일 | 이메일/비밀번호 가입 |
 | 구도 프리셋 Bottom Sheet (서버 + 번들 기본값) | 인앱 결제 (PRD상 영구 제외) |
 | 레퍼런스 실루엣 오버레이 + 투명도 슬라이더 | 촬영 후 편집/필터 |
 | 실시간 포즈 매칭 + 기울기 가이드 + Perfect Match 피드백 | 동영상 촬영 |
 | 무음 촬영(선택), 비율 크롭(선택), 갤러리 저장 | 클라우드 백업 |
 | 갤러리 사진 → 커스텀 실루엣 (보상형 광고 게이트) | 커스텀 실루엣 서버 공유 |
 | Remote Config 기반 광고 3종 제어 | |
+| SNS 로그인(선택) + `is_staff`/`is_superuser` 광고 면제 + 회원 탈퇴 (**마지막 단계**) | |
 
 ## 2. 패키지 (2026-11-18 pub.dev 최신 기준)
 
@@ -31,7 +32,13 @@
 | `gal` | ^3.0.1 | 갤러리 저장 (iOS/Android 권한 처리 포함) |
 | `image_picker` | 최신 | 갤러리 사진 선택 |
 | `image` | 최신 | 무음 촬영 시 YUV/BGRA → JPEG 변환, 비율 크롭 |
-| `dio` | 최신 | 프리셋 API 호출 (ETag) |
+| `dio` | ^5.11.1 | 프리셋·인증 API 호출 |
+| `flutter_secure_storage` | ^11.2.0 | 인증 토큰 보관 (Keychain / Keystore) |
+| `kakao_flutter_sdk_user` | ^2.1.0 | 카카오 로그인 |
+| `google_sign_in` | ^7.2.0 | Google 로그인 (ID 토큰) |
+| `sign_in_with_apple` | ^8.2.0 | Apple 로그인 (iOS만) |
+| `crypto` | 최신 | Apple nonce SHA-256 |
+| `package_info_plus` | ^10.2.2 | 설정 화면 앱 버전 |
 | `app_tracking_transparency` | 최신 | iOS ATT 동의 |
 | `flutter_lints` / `very_good_analysis` | 최신 | 정적 분석 |
 
@@ -45,12 +52,14 @@ PRD 지정 4개 폴더(`screens`, `services`, `widgets`, `models`)를 유지하�
 | `lib/app.dart` | `MaterialApp.router`, 테마, go_router 설정 |
 | `lib/core/` | 상수(`ad_unit_ids.dart`, `remote_config_keys.dart`), 테마, 환경값(`--dart-define-from-file`) |
 | `lib/models/` | `Preset`, `PoseLandmarks`, `AttitudeState`, `MatchResult`, `AppSettings` |
-| `lib/services/` | `RemoteConfigService`, `AdService`, `CameraService`, `PoseService`, `PoseMatcher`, `AttitudeService`, `CaptureService`, `PresetRepository`, `SettingsStore` |
+| `lib/services/` | `RemoteConfigService`, `AdService`, `AdConsentService`, `AuthApi`, `AuthSessionStore`, `sns/SnsSignIn`, `CameraService`, `PoseService`, `PoseMatcher`, `AttitudeService`, `CaptureService`, `PresetRepository`, `SettingsStore` |
 | `lib/providers/` | 위 서비스를 노출하는 Riverpod Provider/Notifier |
 | `lib/screens/` | `camera_screen.dart`, `settings_screen.dart` |
 | `lib/widgets/` | `camera_preview_fullscreen`, `shutter_button`, `preset_bottom_sheet`, `preset_grid_item`, `native_ad_tile`, `silhouette_painter`, `attitude_indicator`, `opacity_slider`, `perfect_match_banner` |
 | `assets/presets/` | 번들 기본 프리셋 JSON + 실루엣 PNG (오프라인 폴백) |
-| `env/dev.json`, `env/prod.json` | API Base URL, 광고 단위 ID (prod 파일은 git 제외) |
+| `env/*.example.json` | `--dart-define-from-file` 템플릿 (API URL, 광고 단위 ID, Kakao/Google 키). 실제 `env/dev.json`, `env/prod.json`은 git 제외 |
+| `ios/Flutter/App.xcconfig`, `Secrets.xcconfig` | AdMob App ID, Kakao 키, Google 역방향 클라이언트 ID (기본값은 App, 실제 값은 git 제외 Secrets) |
+| `android/local.properties` | `admob.appId`, `kakao.nativeAppKey` (git 제외) |
 | `test/` | 단위·위젯 테스트 |
 
 ## 4. 화면 및 UX
@@ -59,7 +68,8 @@ PRD 지정 4개 폴더(`screens`, `services`, `widgets`, `models`)를 유지하�
 |------|------|
 | CameraScreen (메인) | 전체 화면 프리뷰 / 상단: 투명도 슬라이더, 설정 아이콘, 비율 토글 / 중앙: 실루엣 오버레이 + 자세계 십자선 / 하단: 프리셋 썸네일(좌), 셔터(중), 렌즈 전환(우) |
 | PresetBottomSheet | 화면 50% 높이 Draggable Sheet, 카테고리 탭(전신/상반신/부르고찍기/옆모습/소품) + 3열 GridView, 첫 칸은 "내 사진으로 만들기" |
-| SettingsScreen | 무음 촬영(기본 OFF), 비율 자동 크롭(기본 OFF), 격자선 표시, 개인정보처리방침/약관(web 링크), 오픈소스 라이선스, 앱 버전 |
+| SettingsScreen | 계정(로그인 / 이름·제공자·역할 배지 / 로그아웃 / 회원 탈퇴), 무음 촬영(기본 OFF), 비율 자동 크롭(기본 OFF), 격자선 표시, 개인정보처리방침/약관(web 링크), 오픈소스 라이선스, 앱 버전 |
+| LoginScreen | "로그인은 선택 사항" 안내 + 카카오 / Google / Apple(iOS만) 버튼. 빌드에 키가 없는 제공자는 숨김 |
 | 저장 완료 | SnackBar "저장 완료" + 썸네일 갱신 |
 
 권한 요청 순서: 카메라(앱 첫 진입) → ATT(iOS, 첫 광고 로드 직전) → 사진 저장(첫 저장 시).
@@ -92,7 +102,9 @@ PRD 지정 4개 폴더(`screens`, `services`, `widgets`, `models`)를 유지하�
 - `AdService`의 모든 public 메서드는 첫 줄에서 플래그를 확인하고 false면 즉시 반환 → 호출부에 분기 로직이 퍼지지 않게 함.
 - 전면 광고 카운터: 저장 성공 시 +1 → `count >= interval && show_interstitial_ad`면 광고 표시 → 광고 닫힘 또는 미표시 시 0으로 초기화 (PRD Step 5 그대로). 카운트는 `shared_preferences`에 보존.
 - 보상형 광고: `show_rewarded_ad=false`면 바로 실루엣 생성, true면 `onUserEarnedReward` 콜백 안에서만 생성 실행. 광고 로드 실패 시에는 생성 허용 (사용자 불이익 방지).
-- 디버그 빌드는 항상 Google 테스트 광고 단위 ID 사용.
+- 디버그 빌드는 항상 Google 테스트 광고 단위 ID 사용. 릴리스 빌드에서 광고 단위 ID가 비어 있으면 해당 광고는 로드하지 않음.
+- 광고 SDK 초기화(UMP 동의 → iOS ATT → `MobileAds.initialize`)는 **첫 광고 요청 직전에 1회**. 플래그가 모두 false면 동의/ATT 팝업도 띄우지 않음.
+- 실제 적용 플래그 = Remote Config 값 (M7 이후: 로그인 세션 복원 중이거나 광고 면제 계정이면 전부 false, 6.7).
 
 ### 6.2 카메라 (Step 2)
 
@@ -136,6 +148,19 @@ PRD 지정 4개 폴더(`screens`, `services`, `widgets`, `models`)를 유지하�
 
 저장은 `gal`로 "LikeZZIX" 앨범에 저장 → 카운터/전면 광고 처리 → "저장 완료" 토스트.
 
+### 6.7 계정 / 광고 면제 (마지막 단계, M7)
+
+| 항목 | 내용 |
+|------|------|
+| 로그인 | 선택 사항. 설정 > 로그인에서 카카오 / Google / Apple(iOS). SDK가 준 자격 증명을 서버 `POST /v1/auth/{provider}`로 보내고 서버가 검증 |
+| 자격 증명 | Google: ID 토큰 (`serverClientId`=웹 클라이언트 ID) / Kakao: access token / Apple: identity token + authorization code + raw nonce(+최초 이름) |
+| 세션 저장 | access·refresh 토큰과 사용자 정보를 `flutter_secure_storage`에 보관 |
+| 앱 시작 | 저장된 세션 즉시 복원 → 백그라운드로 `GET /v1/auth/me` 재검증. 401이면 refresh 후 1회 재시도, refresh도 401이면 로그아웃 처리. 네트워크 오류면 캐시 유지 |
+| 역할 | `is_superuser` → superuser, `is_staff` → staff, 그 외 user, 비로그인 guest. JSON 값이 bool true가 아니면 권한 없음 |
+| 광고 면제 | staff·superuser는 Remote Config와 무관하게 광고 3종 OFF, 광고 SDK·동의 팝업도 호출하지 않음. 역할이 바뀌면 `AdService`를 새로 만들고 미리 로드한 광고 폐기 |
+| 로그아웃 | 로컬 세션 즉시 삭제 → 서버 refresh 폐기(실패 무시) → SDK 로그아웃 |
+| 회원 탈퇴 | 확인 다이얼로그 → `DELETE /v1/auth/me` 성공 시에만 로컬 삭제 (실패하면 탈퇴된 것처럼 보이지 않게 유지) |
+
 ## 7. 오프라인 / 네트워크
 
 - `PresetRepository`: 번들 프리셋 즉시 표시 → 백그라운드에서 `GET /v1/presets` (If-None-Match) → 성공 시 로컬 캐시 갱신.
@@ -146,8 +171,8 @@ PRD 지정 4개 폴더(`screens`, `services`, `widgets`, `models`)를 유지하�
 | 항목 | 기준 |
 |------|------|
 | 정적 분석 | `flutter analyze` 경고 0 |
-| 단위 테스트 | `PoseMatcher`(오차율·히스테리시스), `AttitudeService`(각도 계산), 광고 카운터, Remote Config 기본값 |
-| 위젯 테스트 | 그리드 5번째 칸 광고/프리셋 분기, 슬라이더 연동 |
+| 단위 테스트 | `PoseMatcher`(오차율·히스테리시스), `AttitudeService`(각도 계산), 광고 카운터, Remote Config 기본값, 광고 플래그 선검사, 역할별 광고 면제, 세션 복원·재검증·refresh·탈퇴 |
+| 위젯 테스트 | 그리드 5번째 칸 광고/프리셋 분기, 슬라이더 연동, 로그인·로그아웃·탈퇴 흐름 |
 | 실기기 검증 | iPhone 1대 + Android 중급기 1대에서 프리뷰 30fps 유지, 포즈 처리 ~10fps |
 
 ## 9. 작업 체크리스트
@@ -156,16 +181,19 @@ PRD 지정 4개 폴더(`screens`, `services`, `widgets`, `models`)를 유지하�
 - [x] `flutter create --org com.woohalabs --project-name likezzix` (iOS/Android만)
 - [x] PRD 폴더 구조 생성 (`core`, `models`, `services`, `providers`, `screens`, `widgets`)
 - [ ] Bundle ID `com.woohalabs.likezzix` 최종 확정
-- [ ] Firebase 프로젝트 생성 + `flutterfire configure` (사용자 계정 필요)
+- [x] Firebase 프로젝트 생성 (`like-zzix`) + `flutterfire configure` (iOS/Android 앱 등록, `firebase_core` 추가)
 - [ ] AdMob 앱 등록 및 App ID 발급 (사용자 계정 필요)
-- [ ] iOS 최소 버전 15.5 이상, Android minSdk 21 이상 설정 (ML Kit 요구사항)
+- [x] iOS 최소 버전 15.5 설정, Android minSdk는 Flutter 기본값 24 사용 (ML Kit 요구 21 이상 충족)
+- [x] Firebase 설정 파일은 git 제외 (reviewmaps와 동일 정책), `Firebase.initializeApp()`은 네이티브 설정 파일 사용
 
 ### M1. 앱 초기화 + Remote Config + AdMob (PRD Step 1)
-- [ ] 패키지 추가 및 `main.dart` 초기화 순서 구성
-- [ ] `RemoteConfigService` + Provider, 기본값 4종
-- [ ] `AdService` (플래그 선검사, 테스트 ID 분기)
-- [ ] UMP 동의 + iOS ATT 흐름
-- [ ] Info.plist / AndroidManifest 권한 문구 및 AdMob App ID
+- [x] 패키지 추가 및 `main.dart` 초기화 순서 구성 (세로 고정 → Kakao → Firebase → Remote Config → ProviderScope)
+- [x] `RemoteConfigService` + Provider, 기본값 4종 (실패 시 기본값으로 진행)
+- [x] `AdService` (플래그 선검사, 테스트 ID 분기, 네이티브/전면/보상형 로드·표시)
+- [x] UMP 동의 + iOS ATT 흐름 (첫 광고 요청 직전 지연 실행)
+- [x] Info.plist / AndroidManifest 권한 문구 및 AdMob App ID (테스트 ID 기본, 실제 값은 git 제외 파일)
+- [x] go_router 기본 라우트 (`/`), 라우터는 Provider로 앱마다 생성
+- [ ] AdMob 실제 App ID / 광고 단위 ID 입력 (사용자 계정 필요)
 
 ### M2. 카메라 UI (PRD Step 2)
 - [ ] 풀스크린 프리뷰 + 라이프사이클 처리
@@ -195,3 +223,14 @@ PRD 지정 4개 폴더(`screens`, `services`, `widgets`, `models`)를 유지하�
 - [ ] 앱 아이콘 / 스플래시
 - [ ] Crashlytics / Analytics 이벤트 (`preset_selected`, `perfect_match`, `photo_saved`)
 - [ ] 스토어 스크린샷, 개인정보처리방침 URL (web 의존)
+
+### M7. 계정 / 광고 면제 (마지막 단계)
+> 프로토타입 우선. 클라이언트 구현은 `feature/sns-auth` 브랜치에 보관 (테스트 포함), 프로토타입 완료 후 rebase하여 머지.
+
+- [x] (브랜치) SNS 로그인 서비스 (카카오 / Google ID 토큰 / Apple nonce)
+- [x] (브랜치) `AuthApi`, `AuthSessionStore`, `AuthController` (복원·재검증·refresh·로그아웃·탈퇴)
+- [x] (브랜치) `is_staff` / `is_superuser` → 광고 3종 OFF, 세션 복원 중 광고 OFF
+- [x] (브랜치) 로그인 화면, 설정 화면 계정 섹션, 회원 탈퇴
+- [x] (브랜치) iOS URL 스킴·Apple 로그인 entitlement, Android 카카오 리다이렉트 Activity
+- [ ] Kakao Developers 앱 등록, Google OAuth 클라이언트(iOS/Android/웹) 발급, Apple Sign in 활성화 (사용자 계정 필요)
+- [ ] 서버 인증 API 연동 후 실기기 로그인 검증 (S1.5 의존)

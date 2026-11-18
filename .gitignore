@@ -13,6 +13,16 @@ request.md
 claudedocs/images/
 
 # 환경별 비밀값
-mobile/env/prod.json
+mobile/env/*.json
+!mobile/env/*.example.json
 **/.env
 **/.env.*
+
+# 실제 AdMob App ID (iOS). 기본값은 mobile/ios/Flutter/AdMob.xcconfig의 테스트 ID
+mobile/ios/Flutter/Secrets.xcconfig
+
+# Firebase 설정 파일 (reviewmaps와 동일 정책: 공개 저장소에 포함하지 않음, flutterfire configure로 생성)
+mobile/android/app/google-services.json
+mobile/ios/Runner/GoogleService-Info.plist
+mobile/lib/firebase_options.dart
+mobile/firebase.json

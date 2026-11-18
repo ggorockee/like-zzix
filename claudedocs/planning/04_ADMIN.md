@@ -8,7 +8,8 @@
 
 | 기능 | 설명 |
 |------|------|
-| 로그인 | server 세션 쿠키 방식 (`/admin/v1/auth/login`) |
+| 로그인 | Google 로그인(Google Identity Services) → `/admin/v1/auth/google` → `is_superuser` 사용자만 세션 쿠키 발급. 관리자 비밀번호 없음 |
+| 사용자 관리 | 앱 사용자 검색, `is_staff`(광고 면제 스태프) / `is_superuser`(콘솔 접근 + 광고 면제) 부여·회수, 비활성화 |
 | 프리셋 목록 | 카테고리 필터, 공개 상태, 드래그 정렬 |
 | 프리셋 편집기 | 이미지 업로드 → 브라우저에서 포즈 추출 → 관절 점 드래그 보정 → 실루엣 미리보기 → 권장 각도/비율/팁 입력 → 저장 |
 | 실루엣 렌더링 | 편집기 Canvas에서 투명 PNG 실루엣과 썸네일(WebP)을 생성해 업로드 |
@@ -33,6 +34,7 @@
 | `app/pages/presets/index.vue` | 목록 (`UTable`) |
 | `app/pages/presets/[id].vue` | 편집기 |
 | `app/pages/categories.vue` | 카테고리 |
+| `app/pages/users.vue` | 사용자 검색·역할 토글 (`UTable` + `USwitch`), 변경 시 확인 모달 |
 | `app/components/pose/` | `PoseEditorCanvas`, `LandmarkHandle`, `SilhouettePreview`, `PhoneFramePreview` |
 | `app/composables/` | `usePoseLandmarker` (모델 지연 로딩), `useApi` (`$fetch` + credentials), `useUpload` (presigned PUT) |
 | `app/middleware/auth.global.ts` | 미로그인 시 `/login` 이동 |
@@ -44,7 +46,8 @@
 
 ### A1. 기반
 - [ ] Nuxt 4 SPA + Nuxt UI 대시보드 레이아웃
-- [ ] 로그인 / 인증 미들웨어
+- [ ] Google 로그인 (superuser만) / 인증 미들웨어
+- [ ] 사용자 관리 페이지 (스태프·슈퍼계정 지정 → 앱 광고 면제)
 
 ### A2. 프리셋 관리
 - [ ] 목록 / 상태 전환 / 정렬

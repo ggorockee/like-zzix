@@ -1,7 +1,7 @@
 # 라익찍스 (Like ZZIX) - 모노레포 전체 설계
 
 > 기준일: 2026-11-18 · 원본: `claudedocs/PRD_MASTER.md`
-> 진행 순서: **mobile → server → admin → web**
+> 진행 순서: **mobile 프로토타입 → server → admin → web → 계정(SNS 로그인·광고 면제)**
 
 ## 1. 모노레포 구성
 
@@ -19,6 +19,8 @@
 | admin → server | 관리자가 레퍼런스 이미지를 업로드하면 **브라우저에서 MediaPipe로 33개 관절 좌표를 추출**하고, 이미지와 좌표를 서버에 저장 |
 | server → 오브젝트 스토리지 | 이미지/실루엣 썸네일은 S3(또는 GCS)에 저장, CDN으로 서빙 |
 | mobile → server | 앱 시작 시 `GET /v1/presets` 호출 (ETag 캐시), 실패 시 앱 번들 기본 프리셋 사용 |
+| mobile → server (인증) | SNS(카카오/Google/Apple) 자격 증명을 서버가 검증 → 자체 토큰 발급. `GET /v1/auth/me`의 `is_staff`/`is_superuser`로 광고 면제 판단 |
+| admin → server (인증) | Google 로그인 → `is_superuser` 사용자만 콘솔 세션 발급 (별도 관리자 비밀번호 없음) |
 | mobile → Firebase | Remote Config(광고 플래그), Crashlytics, Analytics |
 | mobile → AdMob | Remote Config 플래그가 true일 때만 광고 로드 |
 | web → 스토어 | 랜딩에서 스토어 링크, 프리셋 공유 링크(`/p/{id}`) → 앱 딥링크 |
@@ -31,7 +33,9 @@
 | 2 | 포즈 좌표계는 **BlazePose 33 랜드마크**로 통일 | ML Kit Pose(모바일)와 MediaPipe Pose Landmarker(웹/admin)가 동일한 33점 토폴로지 사용 → admin에서 추출한 좌표를 앱에서 그대로 사용 가능 | 서버(Go)에서 추출 → Go에 ML 런타임 필요, 비효율 |
 | 3 | 좌표는 **이미지 기준 정규화(0~1)** 로 저장 | 해상도/화면비와 무관하게 재사용 | 픽셀 좌표 |
 | 4 | web/admin 프레임워크는 **Nuxt 4 하나로 통일** | 1인 개발 기준 학습·유지 비용 최소화, web은 SSG·admin은 SPA로 모드만 다르게 사용, 둘 다 Node 서버 없이 정적 배포 → 백엔드는 오직 Go | Next.js 16 (아래 4장 참고) |
-| 5 | 사용자 계정 없음 (MVP) | 무료·광고 모델, 개인정보 수집 최소화 → 심사·약관 부담 감소 | Firebase Auth (차후) |
+| 5 | **SNS 로그인은 선택 사항** (카카오/Google/Apple). 사람 단위로 `is_staff`/`is_superuser`를 부여하고, 둘 중 하나라도 true면 광고 전부 OFF | 운영진·지인을 사람 단위로 구분해 광고 면제. 로그인 없이도 촬영 기능 전부 사용 가능 (Apple 5.1.1) | 계정 없음(초기안), 관계자 전용 이메일 로그인 |
+| 7 | 인증은 **Go 서버가 직접 발급** (access JWT 15분 + refresh 30일 회전). SNS 토큰은 서버에서 검증: Google ID 토큰 `aud`, Kakao `app_id`, Apple 서명·`aud`·`nonce` | 사용자/역할의 단일 진실 공급원을 Go DB로 유지, Firebase Auth는 카카오 미지원(커스텀 토큰 필요), reviewmaps와 같은 구조. reviewmaps의 Google access token 방식은 다른 앱 토큰 재사용이 가능해 ID 토큰으로 강화 | Firebase Auth + custom claims |
+| 8 | 관리자 콘솔은 **Python/Django 없이 Nuxt SPA + Go Admin API**. 로그인은 Google 로그인 후 `is_superuser`만 허용, HttpOnly 세션 쿠키 | 비밀번호 저장·유출 위험 없음, 앱과 같은 `users` 테이블로 역할 관리, 백엔드 언어 1개 유지 (reviewmaps의 Django admin은 별도 런타임·속도 문제) | Django admin, 별도 관리자 비밀번호 계정 |
 | 6 | 프리셋 이미지는 **자체 촬영/라이선스 확보 이미지만** 사용 | `claudedocs/images/`의 참고 이미지는 인스타그램 게시물(타인 저작물·초상)로 배포 불가 | 실루엣 라인 드로잉만 배포 |
 
 ## 4. web/admin 프레임워크 선택 근거
@@ -60,11 +64,13 @@
 
 | 단계 | 범위 | 상태 |
 |------|------|------|
-| M0 | mobile 프로젝트 생성, 폴더 구조, 린트 | [x] |
-| M1~M5 | mobile PRD Step 1~5 (`01_MOBILE.md`) | [ ] |
+| M0 | mobile 프로젝트 생성, 폴더 구조, 린트, Firebase 연결 | [x] |
+| M1 | Remote Config + AdMob 초기화 | [x] |
+| M2~M5 | mobile PRD Step 2~5 (`01_MOBILE.md`) — 프로토타입 우선 | [ ] |
 | S1~S3 | server 프리셋 API, admin API, Docker/K8s (`02_SERVER.md`) | [ ] |
 | A1~A3 | admin 로그인, 프리셋 CRUD, 포즈 추출 (`04_ADMIN.md`) | [ ] |
 | W1~W2 | web 랜딩, 정책 페이지, 딥링크 (`03_WEB.md`) | [ ] |
+| M7·S1.5 | SNS 로그인 + `is_staff`/`is_superuser` 광고 면제 (마지막, 클라이언트는 `feature/sns-auth` 브랜치) | [ ] |
 | R1 | 스토어 심사 제출 (정책 URL은 web 완료 후 가능) | [ ] |
 
 ## 6. 공통 리스크 / 확인 필요 사항
@@ -75,4 +81,6 @@
 | 레퍼런스 이미지 저작권 | 참고 이미지 4장은 타인 게시물 | 자체 촬영/구매 이미지로 교체 |
 | AdMob 개인정보 | iOS ATT, EU UMP 동의 필요 | M1에서 UMP + ATT 흐름 포함 |
 | 정책 URL | 스토어 등록에 개인정보처리방침 URL 필수 | web W1을 스토어 제출 전 완료 |
-| Git 저장소 | 현재 폴더가 git 저장소가 아님 | `git init` 후 feature 브랜치 전략 적용 필요 |
+| 개인정보 (SNS 로그인) | 이메일·이름·제공자 식별자 수집 | 개인정보처리방침에 항목·보관 기간 명시, 앱 내 회원 탈퇴 제공 (Apple 5.1.1(v)) |
+| Apple 4.8 | iOS에서 카카오/Google 로그인을 제공하면 Apple 로그인 필수 | iOS에 Apple 로그인 포함 (Android는 미제공) |
+| 이메일 기반 계정 병합 | 카카오 이메일은 미인증일 수 있어 탈취 위험 | 제공자+고유 ID 단위로만 계정 식별, 이메일로 자동 병합하지 않음 |
