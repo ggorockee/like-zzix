@@ -45,6 +45,10 @@ dependencies:
   gal: ^3.0.1
   sensors_plus: ^7.1.1
   google_mlkit_pose_detection: ^1.0.3
+  package_info_plus: ^10.2.2
+  url_launcher: ^6.3.3
+  http: ^1.6.0
+  firebase_crashlytics: ^6.1.0
 dev_dependencies:
   flutter_test:
     sdk: flutter

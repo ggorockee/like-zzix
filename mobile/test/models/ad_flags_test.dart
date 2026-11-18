@@ -12,13 +12,29 @@ void main() {
       expect(AdFlags.defaults.anyEnabled, isFalse);
     });
 
-    test('Remote Config 기본값 맵이 PRD 4개 키와 일치', () {
-      expect(RemoteConfigKeys.defaults, {
-        'show_native_ad': false,
-        'show_interstitial_ad': false,
-        'show_rewarded_ad': false,
-        'interstitial_ad_interval': 3,
-      });
+    test('Remote Config 기본값: PRD 광고 4개 키 + 업데이트 안내 없음', () {
+      expect(RemoteConfigKeys.defaults, containsPair('show_native_ad', false));
+      expect(
+        RemoteConfigKeys.defaults,
+        containsPair('show_interstitial_ad', false),
+      );
+      expect(
+        RemoteConfigKeys.defaults,
+        containsPair('show_rewarded_ad', false),
+      );
+      expect(
+        RemoteConfigKeys.defaults,
+        containsPair('interstitial_ad_interval', 3),
+      );
+      // 버전 기본값 0.0.0 → 어떤 버전도 업데이트 팝업이 뜨지 않음
+      for (final key in [
+        'android_min_version',
+        'ios_min_version',
+        'android_latest_version',
+        'ios_latest_version',
+      ]) {
+        expect(RemoteConfigKeys.defaults, containsPair(key, '0.0.0'));
+      }
     });
 
     test('전면 광고 간격이 1 미만이면 기본값으로 보정', () {

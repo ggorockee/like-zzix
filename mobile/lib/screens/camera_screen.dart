@@ -12,9 +12,11 @@ import '../providers/preset_providers.dart';
 import '../services/capture_service.dart';
 import '../models/preview_transform.dart';
 import '../models/zoom_range.dart';
+import '../providers/api_providers.dart';
 import '../providers/attitude_providers.dart';
 import '../providers/pose_providers.dart';
 import '../services/pose_service.dart';
+import '../services/telemetry_service.dart';
 import '../widgets/angle_indicator.dart';
 import '../widgets/camera_preview_fullscreen.dart';
 import '../widgets/frame_guide.dart';
@@ -114,10 +116,12 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       cameras = await ref.read(availableCamerasProvider.future);
     } on Object {
       if (mounted) setState(() => _issue = _CameraIssue.unavailable);
+      _record(AppEvent.cameraUnavailable);
       return;
     }
     if (cameras.isEmpty) {
       if (mounted) setState(() => _issue = _CameraIssue.unavailable);
+      _record(AppEvent.cameraUnavailable);
       return;
     }
     final description = cameras.firstWhere(
@@ -140,6 +144,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
             ? _CameraIssue.permissionDenied
             : _CameraIssue.failed,
       );
+      _record(AppEvent.cameraUnavailable);
       return;
     }
     // 초기화 중 화면을 떠났으면 닫는다 (resumed에서 다시 연다).
@@ -198,7 +203,13 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     unawaited(_applyZoom(controller));
   }
 
-  Future<void> _openGallery() => ref.read(captureServiceProvider).openGallery();
+  Future<void> _openGallery() {
+    _record(AppEvent.galleryOpened);
+    return ref.read(captureServiceProvider).openGallery();
+  }
+
+  void _record(AppEvent event, {String? preset}) =>
+      ref.read(telemetryProvider)?.record(event, preset: preset);
 
   // ---------------------------------------------------------------------------
   // 실시간 포즈 인식
@@ -338,6 +349,12 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       if (result == SaveResult.saved && mounted) {
         setState(() => _lastPhotoPath = photo.path);
       }
+      _record(
+        result == SaveResult.saved
+            ? AppEvent.photoSaved
+            : AppEvent.photoSaveFailed,
+        preset: ref.read(selectedPresetProvider)?.id,
+      );
       messenger.showSnackBar(
         SnackBar(
           content: Text(switch (result) {
