@@ -1,0 +1,104 @@
+# 📸 라익찍스 (Like ZZIX) - 마스터 기획안 및 AI 개발 프롬프트
+
+## 1. 프로젝트 개요 (Project Overview)
+* **프로젝트명:** 라익찍스 (Like ZZIX)
+* **스토어 ASO 타이틀:** 라익찍스 - 딱 이대로 찍어주는 완벽 구도 카메라
+* **GitHub Repo:** `like-zzix`
+* **Bundle ID:** `com.woohalabs.likezzix` (또는 지정한 ID)
+* **핵심 가치:** 똥손(남친, 낯선 사람 등)에게 폰을 맡겨도, 미리 설정한 레퍼런스 구도와 100% 일치하는 완벽한 비율의 사진을 건질 수 있게 돕는 AR 실루엣 가이드 카메라.
+* **주요 특징:** 
+  * SNOW 앱과 같은 직관적인 풀스크린 카메라 UI
+  * 무음 촬영 및 자동 비율 보정 (선택)
+  * 완벽한 구도 일치 시 햅틱 피드백(진동) 및 시각적 알림
+  * 인앱 결제 없는 100% 무료 모델 (보상형/전면 광고 기반 하이브리드 수익화)
+
+## 2. 기술 스택 (Tech Stack)
+* **Frontend:** Flutter (iOS/Android 크로스 플랫폼)
+* **Backend:** Go (Fiber 프레임워크) - 초고속 API 처리
+* **Infrastructure:** Docker, Kubernetes (EKS/GCP)
+* **BaaS & Config:** Firebase Remote Config, Google AdMob
+* **Core Packages (Flutter):**
+  * `camera`: 실시간 프리뷰 및 무음 캡처
+  * `google_mlkit_pose_detection`: 온디바이스 AI 기반 관절 랜드마크 추출
+  * `sensors_plus`: 디바이스 자이로스코프/가속도계 기반 각도(Pitch, Roll) 계산
+  * `shared_preferences`: 로컬 설정 및 광고 카운터 저장
+  * `google_mobile_ads`: AdMob 광고 연동
+
+## 3. 아키텍처 및 비즈니스 규칙 (Architecture & Business Rules)
+* **상태 관리:** Provider 또는 Riverpod 중 하나로 철저히 통일.
+* **광고 및 수익화 (비사업자 개인 개발자 모델):** 
+  * 인앱 결제(IAP) 로직 배제.
+  * 모든 광고 유닛(Native, Interstitial, Rewarded)은 `Firebase Remote Config`의 플래그 값에 따라 동적으로 노출 여부 결정.
+  * **초기 설정값:** 런칭 초기 유저 확보를 위해 모든 광고 플래그의 Default 값은 `false`로 설정.
+  * 갤러리 사진을 커스텀 실루엣으로 변환하는 고급 기능은 향후 보상형 광고(Rewarded Ad) 시청 시 1회 잠금 해제되도록 설계.
+* **코드 품질:** 최신 버전 기준 Null Safety 엄격 준수, 모듈화된 폴더 구조(`lib/screens`, `lib/services`, `lib/widgets`, `lib/models`) 유지.
+
+---
+
+## 🤖 [AI 입력용] 마스터 시스템 프롬프트
+*AI 코딩 어시스턴트(Cursor, Copilot 등)와 새 채팅을 시작할 때 가장 먼저 입력하세요.*
+
+> 아래 내용을 읽고 프로젝트의 목표와 기술 스택을 완벽히 숙지해. 코드는 아직 작성하지 말고 "숙지 완료"라고만 대답해.
+>
+> **[Project Overview]**
+> * 프로젝트명: 라익찍스 (Like ZZIX)
+> * 목표: 똥손도 완벽한 비율과 구도로 인물 사진을 찍을 수 있게 돕는 AR 실루엣 가이드 카메라 앱. 
+> * 특징: 풀스크린 카메라 UI, 무음 촬영, 햅틱 피드백, Remote Config 기반 광고 제어.
+> 
+> **[Tech Stack]**
+> * Flutter, Go(Fiber), Firebase Remote Config, Google AdMob
+> * Packages: camera, google_mlkit_pose_detection, sensors_plus, google_mobile_ads
+>
+> **[Rules]**
+> * 상태 관리는 Riverpod(또는 Provider)로 통일.
+> * 인앱 결제 없음. 모든 광고 유닛은 Remote Config 값(초기값 false)에 따라 렌더링을 제어.
+> * Null safety 준수 및 모듈화된 폴더 구조 작성.
+
+---
+
+## 🛠️ [AI 입력용] 단계별 개발 프롬프트 (Development Prompts)
+*마스터 프롬프트 숙지 후, 아래 스텝을 하나씩 복사하여 AI에게 코드 작성을 지시하세요.*
+
+### Step 1: 앱 초기화 및 Remote Config / AdMob 세팅
+> 마스터 PRD를 바탕으로 Step 1 코드를 작성해 줘.
+> 1. Flutter `main.dart`와 앱 진입점 구조 작성.
+> 2. Firebase 및 Google AdMob SDK 초기화 로직을 앱 시작 시점에 배치.
+> 3. Remote Config 서비스를 관리하는 싱글톤 클래스 또는 상태 관리 Provider 생성.
+> 4. Remote Config 기본 파라미터 4가지 설정: `show_native_ad`(false), `show_interstitial_ad`(false), `show_rewarded_ad`(false), `interstitial_ad_interval`(3).
+> 5. 모든 광고 호출 로직은 위 변수들을 먼저 체크하여, false일 경우 즉시 return 하거나 Placeholder UI를 보여주도록 작성.
+
+### Step 2: 메인 카메라 뷰파인더 및 SNOW 스타일 UI 구현
+> Step 1에 이어 Step 2 코드를 작성해 줘.
+> 1. `camera` 패키지를 사용하여 화면 전체를 꽉 채우는 풀스크린 카메라 프리뷰 위젯 구현.
+> 2. 하단에 사진 촬영 셔터 버튼, 렌즈 전환 버튼, 갤러리/프리셋 선택 썸네일 버튼 배치.
+> 3. 좌측 하단 썸네일 버튼 탭 시 화면 절반을 덮으며 올라오는 Bottom Sheet 구현.
+> 4. Bottom Sheet 내부 GridView에 구도 프리셋 목록 렌더링. 단, 5번째 위치에는 `show_native_ad`가 true일 때만 Native Ad 위젯을 렌더링하고, false일 때는 기본 프리셋 아이템 UI로 채워넣는 분기 처리 포함.
+
+### Step 3: Vision AI 기반 AR 실루엣 추출 및 오버레이
+> Step 3 AI 비전 처리 코드를 작성해 줘.
+> 1. `google_mlkit_pose_detection` 패키지를 활용하는 PoseService 클래스 생성.
+> 2. 선택된 정적 레퍼런스 이미지에서 인물의 주요 관절 랜드마크 추출.
+> 3. 추출된 좌표를 기반으로 `CustomPaint` 위젯을 사용하여 카메라 프리뷰 최상단에 반투명한 흰색 점선(실루엣) 오버레이.
+> 4. 화면 상단에 Slider 위젯을 배치하여 점선 실루엣의 투명도(Opacity)를 실시간 조절하도록 연동.
+> 5. 내 기기 갤러리에서 사진을 불러와 커스텀 실루엣 생성 시, `show_rewarded_ad`가 true라면 보상형 광고 뷰를 먼저 띄우고, 시청 완료 콜백 내부에서 실루엣 생성 로직이 실행되도록 처리.
+
+### Step 4: 센서 기반 스마트 디렉팅 및 구도 피드백
+> 촬영자를 가이드하는 Step 4 센서 로직을 작성해 줘.
+> 1. `sensors_plus` 패키지를 연동하여 디바이스의 실시간 pitch(상하)와 roll(좌우) 값 계산.
+> 2. 화면 중앙에 비행기 자세계(Attitude Indicator) 형태의 심플한 십자선 UI를 띄워 디바이스 수평 상태 시각화.
+> 3. 실시간 카메라 프레임의 피사체 포즈 랜드마크와 Step 3의 레퍼런스 실루엣 간 좌표 오차율 계산 알고리즘 작성.
+> 4. 오차율이 10% 미만이고 폰 기울기가 일치할 경우(Perfect Match): 실루엣 점선 색상을 초록색으로 변경, "지금 찍으세요!" 텍스트 팝업, 디바이스 햅틱 진동 0.1초 실행.
+
+### Step 5: 광고 빈도 제어 래퍼 및 저장 로직
+> 촬영 마무리 및 전면 광고 제어 로직인 Step 5를 작성해 줘.
+> 1. 촬영 셔터 탭 시 현재 프레임을 무음으로 캡처하여 로컬 갤러리에 저장.
+> 2. 사진 저장 시마다 로컬 카운트(int) 1씩 증가.
+> 3. 카운트 값이 Remote Config의 `interstitial_ad_interval`과 같고, `show_interstitial_ad`가 true인 경우에만 전면 광고 노출.
+> 4. 전면 광고가 닫히거나 광고 미노출 시 카운트를 0으로 초기화하고 "저장 완료" 토스트 띄움.
+
+### Step 6: Go Fiber 기반 고성능 API 서버 세팅
+> 백엔드로 넘어가서 Go Fiber API 서버와 K8s 배포 설정인 Step 6를 작성해 줘.
+> 1. Go 언어와 Fiber 프레임워크로 경량 API 서버 셋업.
+> 2. 앱에 제공할 고품질 레퍼런스 프리셋 이미지 메타데이터(URL, 카테고리, 포즈 데이터 배열)를 JSON으로 반환하는 GET 엔드포인트 작성.
+> 3. Go 애플리케이션을 가벼운 Alpine 베이스 이미지로 빌드하는 `Dockerfile` 작성.
+> 4. Kubernetes 클러스터 배포를 위한 `Deployment.yaml` 및 `Service.yaml` 작성 (포트 3000, 적절한 리소스 Limit/Request 설정).
