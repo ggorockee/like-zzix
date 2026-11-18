@@ -26,3 +26,7 @@ mobile/android/app/google-services.json
 mobile/ios/Runner/GoogleService-Info.plist
 mobile/lib/firebase_options.dart
 mobile/firebase.json
+
+# 레퍼런스 원본/축소 사진 (타인 게시물·초상권, 로컬 프로토타입 빌드 전용)
+mobile/assets/presets/reference/*
+!mobile/assets/presets/reference/.gitkeep
