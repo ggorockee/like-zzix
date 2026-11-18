@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"sort"
 )
 
@@ -64,6 +65,18 @@ var categoryNames = map[string]string{
 // Load parses and validates the embedded presets.
 func Load() (*Catalog, error) { return Parse(raw) }
 
+// Embedded returns the bundled preset items (used to seed an empty database).
+func Embedded() (version string, items []json.RawMessage, err error) {
+	var doc struct {
+		Version string            `json:"version"`
+		Items   []json.RawMessage `json:"items"`
+	}
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		return "", nil, fmt.Errorf("presets: %w", err)
+	}
+	return doc.Version, doc.Items, nil
+}
+
 // Parse validates a list document: {"version": "...", "items": [...]}.
 func Parse(data []byte) (*Catalog, error) {
 	var doc struct {
@@ -76,19 +89,21 @@ func Parse(data []byte) (*Catalog, error) {
 	if len(doc.Items) == 0 {
 		return nil, errors.New("presets: empty list")
 	}
-	c := &Catalog{version: doc.Version, byID: map[string]Preset{}}
-	for i, item := range doc.Items {
-		var p Preset
-		if err := json.Unmarshal(item, &p); err != nil {
+	return Build(doc.Version, doc.Items)
+}
+
+// Build validates items and builds a catalog. An empty list is allowed
+// (e.g. every preset in the database is still a draft).
+func Build(version string, items []json.RawMessage) (*Catalog, error) {
+	c := &Catalog{version: version, byID: map[string]Preset{}}
+	for i, item := range items {
+		p, err := Validate(item)
+		if err != nil {
 			return nil, fmt.Errorf("presets[%d]: %w", i, err)
-		}
-		if err := validate(p); err != nil {
-			return nil, fmt.Errorf("presets[%d] %q: %w", i, p.ID, err)
 		}
 		if _, dup := c.byID[p.ID]; dup {
 			return nil, fmt.Errorf("presets: duplicate id %q", p.ID)
 		}
-		p.Body = item
 		c.items = append(c.items, p)
 		c.byID[p.ID] = p
 	}
@@ -108,10 +123,38 @@ func Parse(data []byte) (*Catalog, error) {
 	return c, nil
 }
 
+// Validate parses one preset document and checks the schema the app relies on.
+func Validate(item json.RawMessage) (Preset, error) {
+	var p Preset
+	if err := json.Unmarshal(item, &p); err != nil {
+		return p, err
+	}
+	if err := validate(p); err != nil {
+		return p, fmt.Errorf("%q: %w", p.ID, err)
+	}
+	p.Body = item
+	return p, nil
+}
+
+// ValidID reports whether id is a lowercase slug (used in URLs and metric labels).
+func ValidID(id string) bool { return idPattern.MatchString(id) }
+
+var idPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
+
+// CategoryIDs lists the known category ids.
+func CategoryIDs() []string {
+	ids := make([]string, 0, len(categoryNames))
+	for id := range categoryNames {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	return ids
+}
+
 func validate(p Preset) error {
 	switch {
-	case p.ID == "":
-		return errors.New("id is required")
+	case !ValidID(p.ID):
+		return errors.New("id must be a lowercase slug (a-z, 0-9, -)")
 	case p.Title == "":
 		return errors.New("title is required")
 	case categoryNames[p.Category] == "":

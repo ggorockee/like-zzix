@@ -30,7 +30,13 @@ type Metrics struct {
 	appEvents    *prometheus.CounterVec
 	presetEvents *prometheus.CounterVec
 	eventsReject *prometheus.CounterVec
-	presetsCount prometheus.Gauge
+	presetsCount *prometheus.GaugeVec
+	adminLogins  *prometheus.CounterVec
+	adminChanges *prometheus.CounterVec
+	dbUp         prometheus.Gauge
+	dbErrors     *prometheus.CounterVec
+	refreshes    *prometheus.CounterVec
+	lastRefresh  prometheus.Gauge
 }
 
 // New registers all collectors. version and commit label likezzix_build_info.
@@ -72,13 +78,36 @@ func New(version, commit string) *Metrics {
 	m.eventsReject = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: namespace, Name: "app_events_rejected_total", Help: "Activity events or batches rejected.",
 	}, []string{"reason"})
-	m.presetsCount = prometheus.NewGauge(prometheus.GaugeOpts{
-		Namespace: namespace, Name: "presets", Help: "Number of presets served by /v1/presets.",
+	m.presetsCount = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: namespace, Name: "presets", Help: "Number of presets by status (published = served by /v1/presets).",
+	}, []string{"status"})
+	m.adminLogins = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: namespace, Name: "admin_logins_total",
+		Help: "Admin console login attempts (success, not_allowed, invalid_token, rate_limited).",
+	}, []string{"result"})
+	m.adminChanges = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: namespace, Name: "admin_changes_total",
+		Help: "Preset changes made in the admin console (create, update, delete, publish, unpublish, image).",
+	}, []string{"action"})
+	m.dbUp = prometheus.NewGauge(prometheus.GaugeOpts{
+		Namespace: namespace, Name: "db_up", Help: "1 if the last database check succeeded, 0 if it failed, -1 when no database is configured.",
+	})
+	m.dbErrors = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: namespace, Name: "db_errors_total", Help: "Database errors by operation.",
+	}, []string{"op"})
+	m.refreshes = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: namespace, Name: "catalog_refreshes_total",
+		Help: "Preset catalog reloads from the database (ok, error). On error the last good catalog keeps serving.",
+	}, []string{"result"})
+	m.lastRefresh = prometheus.NewGauge(prometheus.GaugeOpts{
+		Namespace: namespace, Name: "catalog_last_success_timestamp_seconds",
+		Help: "Unix time of the last successful catalog reload (0 in static mode).",
 	})
 
 	for _, c := range []prometheus.Collector{
 		m.httpRequests, m.httpDuration, m.httpInFlight, m.appRequests, m.appEvents,
-		m.presetEvents, m.eventsReject, m.presetsCount,
+		m.presetEvents, m.eventsReject, m.presetsCount, m.adminLogins, m.adminChanges,
+		m.dbUp, m.dbErrors, m.refreshes, m.lastRefresh,
 	} {
 		f(c)
 	}
@@ -92,12 +121,23 @@ func New(version, commit string) *Metrics {
 	for _, r := range []string{"malformed", "batch_size", "unknown_event", "invalid_count"} {
 		m.eventsReject.WithLabelValues(r)
 	}
+	for _, r := range []string{"success", "not_allowed", "invalid_token", "rate_limited"} {
+		m.adminLogins.WithLabelValues(r)
+	}
+	for _, a := range []string{"create", "update", "delete", "publish", "unpublish", "image"} {
+		m.adminChanges.WithLabelValues(a)
+	}
+	for _, r := range []string{"ok", "error"} {
+		m.refreshes.WithLabelValues(r)
+	}
+	m.dbUp.Set(-1)
 	return m
 }
 
-// SetPresets records the catalog size and pre-creates the funnel series per preset.
-func (m *Metrics) SetPresets(ids []string) {
-	m.presetsCount.Set(float64(len(ids)))
+// SetPresets records published/draft counts and pre-creates the funnel series per published preset.
+func (m *Metrics) SetPresets(ids []string, drafts int) {
+	m.presetsCount.WithLabelValues("published").Set(float64(len(ids)))
+	m.presetsCount.WithLabelValues("draft").Set(float64(drafts))
 	for _, id := range ids {
 		for event := range PresetEvents {
 			m.presetEvents.WithLabelValues(event, id)
@@ -164,4 +204,32 @@ func statusCode(code int) string {
 		return "other"
 	}
 	return strconv.Itoa(code)
+}
+
+// AdminLogin counts a login attempt by result.
+func (m *Metrics) AdminLogin(result string) { m.adminLogins.WithLabelValues(result).Inc() }
+
+// AdminChange counts a preset change made in the admin console.
+func (m *Metrics) AdminChange(action string) { m.adminChanges.WithLabelValues(action).Inc() }
+
+// DBUp records the result of the last database check.
+func (m *Metrics) DBUp(ok bool) {
+	if ok {
+		m.dbUp.Set(1)
+	} else {
+		m.dbUp.Set(0)
+	}
+}
+
+// DBError counts a failed database operation.
+func (m *Metrics) DBError(op string) { m.dbErrors.WithLabelValues(op).Inc() }
+
+// CatalogRefreshed records a catalog reload; unix is the success time.
+func (m *Metrics) CatalogRefreshed(ok bool, unix float64) {
+	if ok {
+		m.refreshes.WithLabelValues("ok").Inc()
+		m.lastRefresh.Set(unix)
+		return
+	}
+	m.refreshes.WithLabelValues("error").Inc()
 }

@@ -3,6 +3,7 @@ package httpapi
 
 import (
 	_ "embed"
+	"errors"
 	"log/slog"
 	"strings"
 	"time"
@@ -12,7 +13,8 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	"github.com/ggorockee/like-zzix/server/internal/presets"
+	"github.com/ggorockee/like-zzix/server/internal/catalog"
+	"github.com/ggorockee/like-zzix/server/internal/store"
 	"github.com/ggorockee/like-zzix/server/internal/telemetry"
 )
 
@@ -20,7 +22,14 @@ import (
 type Options struct {
 	Metrics *telemetry.Metrics
 	Log     *slog.Logger
+	// Store serves preset images; nil in static (embedded) mode.
+	Store store.Store
+	// Admin enables /admin/v1; nil disables the admin API.
+	Admin *AdminOptions
 }
+
+// maxEventsBody bounds POST /v1/events (the app body limit is raised for image uploads).
+const maxEventsBody = 16 * 1024
 
 type eventsRequest struct {
 	Events []struct {
@@ -33,8 +42,8 @@ type eventsRequest struct {
 //go:embed privacy.html
 var privacyHTML []byte
 
-// New builds the public API.
-func New(catalog *presets.Catalog, opt Options) *fiber.App {
+// New builds the public API (and the admin API when opt.Admin is set).
+func New(holder *catalog.Holder, opt Options) *fiber.App {
 	if opt.Metrics == nil {
 		opt.Metrics = telemetry.New("dev", "none")
 	}
@@ -42,12 +51,12 @@ func New(catalog *presets.Catalog, opt Options) *fiber.App {
 		opt.Log = slog.Default()
 	}
 	m := opt.Metrics
-	m.SetPresets(catalog.IDs())
 
 	app := fiber.New(fiber.Config{
 		AppName:               "like-zzix",
 		DisableStartupMessage: true,
-		BodyLimit:             16 * 1024, // the largest legitimate body is a small events batch
+		// Admin image uploads need up to maxImageBytes; /v1/events checks its own smaller limit.
+		BodyLimit: maxImageBytes + 64*1024,
 		// Fiber reuses buffers; Immutable keeps route/header strings safe to use
 		// as Prometheus labels after the handler returns.
 		Immutable: true,
@@ -61,6 +70,9 @@ func New(catalog *presets.Catalog, opt Options) *fiber.App {
 	})
 	app.Use(recover.New())
 	app.Use(observe(m, opt.Log))
+	if opt.Admin != nil {
+		mountAdmin(app, holder, m, opt.Log, opt.Admin)
+	}
 
 	app.Get("/healthz", func(c *fiber.Ctx) error { return c.SendString("ok") })
 	// Presets are embedded and validated at startup, so readiness only means "serving".
@@ -68,6 +80,7 @@ func New(catalog *presets.Catalog, opt Options) *fiber.App {
 
 	v1 := app.Group("/v1")
 	v1.Get("/presets", func(c *fiber.Ctx) error {
+		catalog := holder.Current()
 		c.Set(fiber.HeaderETag, catalog.ETag())
 		c.Set(fiber.HeaderCacheControl, "public, max-age=300")
 		if matchETag(c.Get(fiber.HeaderIfNoneMatch), catalog.ETag()) {
@@ -77,7 +90,7 @@ func New(catalog *presets.Catalog, opt Options) *fiber.App {
 		return c.Send(catalog.ListJSON())
 	})
 	v1.Get("/presets/:id", func(c *fiber.Ctx) error {
-		body, ok := catalog.Get(c.Params("id"))
+		body, ok := holder.Current().Get(c.Params("id"))
 		if !ok {
 			return fiber.NewError(fiber.StatusNotFound, "preset not found")
 		}
@@ -85,11 +98,24 @@ func New(catalog *presets.Catalog, opt Options) *fiber.App {
 		c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSONCharsetUTF8)
 		return c.Send(body)
 	})
+	v1.Get("/presets/:id/image", func(c *fiber.Ctx) error {
+		id := c.Params("id")
+		// 공개된 프리셋의 사진만 제공 (초안 사진은 관리자 API로만)
+		if opt.Store == nil || !holder.Current().Has(id) {
+			return fiber.NewError(fiber.StatusNotFound, "image not found")
+		}
+		return sendImage(c, opt.Store, m, id)
+	})
 	v1.Get("/categories", func(c *fiber.Ctx) error {
 		c.Set(fiber.HeaderCacheControl, "public, max-age=300")
-		return c.JSON(fiber.Map{"items": catalog.Categories()})
+		return c.JSON(fiber.Map{"items": holder.Current().Categories()})
 	})
 	v1.Post("/events", func(c *fiber.Ctx) error {
+		if len(c.Body()) > maxEventsBody {
+			m.EventRejected("batch_size")
+			return fiber.NewError(fiber.StatusRequestEntityTooLarge, "events batch too large")
+		}
+		catalog := holder.Current()
 		var req eventsRequest
 		if err := c.BodyParser(&req); err != nil {
 			m.EventRejected("malformed")
@@ -126,6 +152,31 @@ func New(catalog *presets.Catalog, opt Options) *fiber.App {
 	})
 
 	return app
+}
+
+// sendImage writes a stored image with long caching when the request carries
+// the current version (?v=<etag>), short caching otherwise.
+func sendImage(c *fiber.Ctx, s store.Store, m *telemetry.Metrics, id string) error {
+	img, err := s.GetImage(c.UserContext(), id)
+	if errors.Is(err, store.ErrNotFound) {
+		return fiber.NewError(fiber.StatusNotFound, "image not found")
+	}
+	if err != nil {
+		m.DBError("get_image")
+		return fiber.NewError(fiber.StatusServiceUnavailable, "image unavailable")
+	}
+	etag := `"` + img.ETag + `"`
+	c.Set(fiber.HeaderETag, etag)
+	if c.Query("v") == img.ETag {
+		c.Set(fiber.HeaderCacheControl, "public, max-age=31536000, immutable")
+	} else {
+		c.Set(fiber.HeaderCacheControl, "public, max-age=300")
+	}
+	if matchETag(c.Get(fiber.HeaderIfNoneMatch), etag) {
+		return c.SendStatus(fiber.StatusNotModified)
+	}
+	c.Set(fiber.HeaderContentType, img.Type)
+	return c.Send(img.Data)
 }
 
 // NewMetricsApp serves /metrics on its own port (not routed by the VirtualService).

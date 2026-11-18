@@ -3,6 +3,7 @@ package httpapi
 import (
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	catalogpkg "github.com/ggorockee/like-zzix/server/internal/catalog"
 	"github.com/ggorockee/like-zzix/server/internal/presets"
 	"github.com/ggorockee/like-zzix/server/internal/telemetry"
 )
@@ -21,7 +23,8 @@ func newTestApp(t *testing.T) (*fiber.App, *telemetry.Metrics, *presets.Catalog)
 		t.Fatal(err)
 	}
 	m := telemetry.New("test", "abc")
-	return New(catalog, Options{Metrics: m}), m, catalog
+	quiet := slog.New(slog.NewTextHandler(io.Discard, nil))
+	return New(catalogpkg.Static(catalog, m), Options{Metrics: m, Log: quiet}), m, catalog
 }
 
 func do(t *testing.T, app *fiber.App, req *http.Request) (*http.Response, string) {

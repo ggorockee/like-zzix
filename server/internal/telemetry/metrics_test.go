@@ -23,7 +23,7 @@ func TestNormalize(t *testing.T) {
 
 func TestPreCreatedSeries(t *testing.T) {
 	m := New("test", "abc")
-	m.SetPresets([]string{"a", "b"})
+	m.SetPresets([]string{"a", "b"}, 1)
 	// every allowlisted event x {android, ios}
 	if got := testutil.CollectAndCount(m.appEvents); got != len(AllowedEvents)*2 {
 		t.Fatalf("app events series: got %d", got)
@@ -31,8 +31,14 @@ func TestPreCreatedSeries(t *testing.T) {
 	if got := testutil.CollectAndCount(m.presetEvents); got != len(PresetEvents)*2 {
 		t.Fatalf("preset events series: got %d", got)
 	}
-	if got := testutil.ToFloat64(m.presetsCount); got != 2 {
-		t.Fatalf("presets gauge: got %v", got)
+	if got := testutil.ToFloat64(m.presetsCount.WithLabelValues("published")); got != 2 {
+		t.Fatalf("published gauge: got %v", got)
+	}
+	if got := testutil.ToFloat64(m.presetsCount.WithLabelValues("draft")); got != 1 {
+		t.Fatalf("draft gauge: got %v", got)
+	}
+	if got := testutil.ToFloat64(m.dbUp); got != -1 {
+		t.Fatalf("db_up must start at -1 (no database), got %v", got)
 	}
 }
 
