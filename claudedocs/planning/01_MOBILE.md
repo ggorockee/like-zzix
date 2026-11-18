@@ -194,7 +194,7 @@ PRD 지정 4개 폴더(`screens`, `services`, `widgets`, `models`)를 유지하�
 - [x] UMP 동의 + iOS ATT 흐름 (첫 광고 요청 직전 지연 실행)
 - [x] Info.plist / AndroidManifest 권한 문구 및 AdMob App ID (테스트 ID 기본, 실제 값은 git 제외 파일)
 - [x] go_router 기본 라우트 (`/`), 라우터는 Provider로 앱마다 생성
-- [ ] AdMob 실제 App ID / 광고 단위 ID 입력 (사용자 계정 필요)
+- [x] AdMob 실제 App ID / 광고 단위 ID 입력 (2026-11-19, git 제외 파일)
 
 ### M2. 카메라 UI (PRD Step 2)
 - [x] 풀스크린 프리뷰 + 라이프사이클 처리 (권한 팝업 중 초기화 경쟁 상태 수정, 카메라 열기 직렬화)
