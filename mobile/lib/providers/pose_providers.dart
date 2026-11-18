@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/pose_match.dart';
 import '../models/preset.dart';
+import '../services/telemetry_service.dart';
+import 'api_providers.dart';
 import 'attitude_providers.dart';
 import 'preset_providers.dart';
 
@@ -74,6 +76,9 @@ class PoseMatchNotifier extends Notifier<PoseMatchState?> {
     if (perfect && !wasPerfect) {
       // "지금 찍으세요!" 진입 시 1회 (PRD: 0.1초 진동)
       HapticFeedback.heavyImpact();
+      ref
+          .read(telemetryProvider)
+          ?.record(AppEvent.perfectMatch, preset: preset.id);
     }
     state = PoseMatchState(result: result, live: live, perfect: perfect);
   }

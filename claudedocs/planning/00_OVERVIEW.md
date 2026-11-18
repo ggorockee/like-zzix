@@ -2,6 +2,7 @@
 
 > 기준일: 2026-11-18 · 원본: `claudedocs/PRD_MASTER.md`
 > 진행 순서: **mobile 프로토타입 → server → admin → web → 계정(SNS 로그인·광고 면제)**
+> 대전제: **모니터링되지 않는 것은 관리될 수 없다** — 새 기능은 지표·대시보드·알림과 함께 배포 (`06_OPERATIONS.md`)
 
 ## 1. 모노레포 구성
 
@@ -21,7 +22,8 @@
 | mobile → server | 앱 시작 시 `GET /v1/presets` 호출 (ETag 캐시), 실패 시 앱 번들 기본 프리셋 사용 |
 | mobile → server (인증) | SNS(카카오/Google/Apple) 자격 증명을 서버가 검증 → 자체 토큰 발급. `GET /v1/auth/me`의 `is_staff`/`is_superuser`로 광고 면제 판단 |
 | admin → server (인증) | Google 로그인 → `is_superuser` 사용자만 콘솔 세션 발급 (별도 관리자 비밀번호 없음) |
-| mobile → Firebase | Remote Config(광고 플래그), Crashlytics, Analytics |
+| mobile → Firebase | Remote Config(광고 플래그·버전 정책), Crashlytics |
+| mobile → server (지표) | 앱 익명 사용 이벤트·버전 헤더 → Prometheus → Grafana `like-zzix` 대시보드·Alertmanager 메일 |
 | mobile → AdMob | Remote Config 플래그가 true일 때만 광고 로드 |
 | web → 스토어 | 랜딩에서 스토어 링크, 프리셋 공유 링크(`/p/{id}`) → 앱 딥링크 |
 
@@ -69,7 +71,8 @@
 | M2 | 카메라 화면 + 프리셋 시트 + 실루엣 오버레이 + 촬영·저장 (화면 MVP) | [x] |
 | M3·M4 | 레퍼런스 오버레이, ML Kit 실시간 포즈 매칭, 각도 가이드, Perfect Match | [x] |
 | M5 | 무음/크롭, 전면 광고, 설정 화면 | [ ] |
-| S1~S3 | server 프리셋 API, admin API, Docker/K8s (`02_SERVER.md`) | [ ] |
+| S1·S3 | server 프리셋 API·앱 이벤트 지표, Docker/K8s 배포, 대시보드·알림 (`02_SERVER.md`, `06_OPERATIONS.md`) | [x] |
+| S2 | admin API (DB 도입) | [ ] |
 | A1~A3 | admin 로그인, 프리셋 CRUD, 포즈 추출 (`04_ADMIN.md`) | [ ] |
 | W1~W2 | web 랜딩, 정책 페이지, 딥링크 (`03_WEB.md`) | [ ] |
 | M7·S1.5 | SNS 로그인 + `is_staff`/`is_superuser` 광고 면제 (마지막, 클라이언트는 `feature/sns-auth` 브랜치) | [ ] |

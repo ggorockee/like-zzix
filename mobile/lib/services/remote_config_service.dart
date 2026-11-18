@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 
 import '../core/remote_config_keys.dart';
 import '../models/ad_flags.dart';
+import '../models/app_version.dart';
 
 /// Firebase Remote Config 래퍼.
 ///
@@ -40,4 +41,35 @@ class RemoteConfigService {
       RemoteConfigKeys.interstitialAdInterval,
     ),
   );
+
+  /// 현재 플랫폼의 업데이트 정책. Android 스토어 링크가 비어 있으면 [packageName]으로 만든다.
+  UpdatePolicy updatePolicy({
+    required bool isIOS,
+    required String packageName,
+  }) {
+    String get(String key) => _remoteConfig.getString(key).trim();
+    final storeUrl = isIOS
+        ? get(RemoteConfigKeys.iosStoreUrl)
+        : get(RemoteConfigKeys.androidStoreUrl).isNotEmpty
+        ? get(RemoteConfigKeys.androidStoreUrl)
+        : 'https://play.google.com/store/apps/details?id=$packageName';
+    return UpdatePolicy(
+      minVersion: AppVersion.parse(
+        get(
+          isIOS
+              ? RemoteConfigKeys.iosMinVersion
+              : RemoteConfigKeys.androidMinVersion,
+        ),
+      ),
+      latestVersion: AppVersion.parse(
+        get(
+          isIOS
+              ? RemoteConfigKeys.iosLatestVersion
+              : RemoteConfigKeys.androidLatestVersion,
+        ),
+      ),
+      storeUrl: storeUrl,
+      message: get(RemoteConfigKeys.updateMessage),
+    );
+  }
 }

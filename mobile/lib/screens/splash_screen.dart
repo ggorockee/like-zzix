@@ -6,6 +6,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../providers/ad_providers.dart';
+import '../providers/api_providers.dart';
+import '../providers/preset_providers.dart';
+import '../services/app_initializer.dart';
+import '../services/telemetry_service.dart';
+import '../widgets/update_dialog.dart';
 import '../widgets/logo_mark.dart';
 
 /// 로딩 화면: 네이티브 스플래시와 같은 배경·로고 위치에서 이어받아 로고가 통통 튄다.
@@ -40,19 +45,33 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   }
 
   Future<void> _proceed() async {
+    AppBootstrap? bootstrap;
     await Future.wait([
       Future<void>.delayed(SplashScreen.minimumDuration),
       ref
           .read(appInitProvider.future)
-          .timeout(
-            SplashScreen.maximumWait,
-            onTimeout: () => throw TimeoutException(null),
-          )
+          .timeout(SplashScreen.maximumWait)
           .then<void>(
-            (_) {},
+            (b) => bootstrap = b,
             onError: (Object e) => debugPrint('[Splash] 초기화 대기 종료: $e'),
           ),
     ]);
+    if (!mounted) return;
+
+    // 프리셋 목록을 미리 받아 둔다 (서버 → 실패 시 번들).
+    unawaited(ref.read(presetsProvider.future).then((_) {}, onError: (_) {}));
+
+    final telemetry = ref.read(telemetryProvider);
+    if (bootstrap case final b?) {
+      // 강제 업데이트면 여기서 멈춘다.
+      await UpdatePrompt.showIfNeeded(
+        context,
+        policy: b.updatePolicy,
+        current: b.currentVersion,
+        telemetry: telemetry,
+      );
+    }
+    telemetry?.record(AppEvent.appOpen);
     if (mounted) context.go('/');
   }
 

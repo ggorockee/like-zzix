@@ -1,0 +1,91 @@
+{
+  "parameterGroups": {
+    "ads": {
+      "description": "광고 노출 제어 (PRD: 런칭 초기 모두 false). 앱 기본값: mobile/lib/core/remote_config_keys.dart",
+      "parameters": {
+        "show_native_ad": {
+          "defaultValue": {
+            "value": "false"
+          },
+          "valueType": "BOOLEAN",
+          "description": "프리셋 시트 5번째 칸 네이티브 광고"
+        },
+        "show_interstitial_ad": {
+          "defaultValue": {
+            "value": "false"
+          },
+          "valueType": "BOOLEAN",
+          "description": "저장 N회마다 전면 광고"
+        },
+        "show_rewarded_ad": {
+          "defaultValue": {
+            "value": "false"
+          },
+          "valueType": "BOOLEAN",
+          "description": "커스텀 실루엣 생성 전 보상형 광고"
+        },
+        "interstitial_ad_interval": {
+          "defaultValue": {
+            "value": "3"
+          },
+          "valueType": "NUMBER",
+          "description": "전면 광고 노출 간격 (저장 횟수, 1 미만이면 3)"
+        }
+      }
+    },
+    "app_update": {
+      "description": "버전 관리: 현재 < min이면 강제 업데이트(닫기 불가), 현재 < latest이면 선택 업데이트(버전당 1회). 배포 순서: 스토어 심사 통과 → latest 올림 → (필요 시) min 올림",
+      "parameters": {
+        "android_min_version": {
+          "defaultValue": {
+            "value": "1.0.0"
+          },
+          "valueType": "STRING",
+          "description": "Android 최소 지원 버전 (x.y.z)"
+        },
+        "android_latest_version": {
+          "defaultValue": {
+            "value": "1.0.0"
+          },
+          "valueType": "STRING",
+          "description": "Android 최신 버전 (x.y.z)"
+        },
+        "ios_min_version": {
+          "defaultValue": {
+            "value": "1.0.0"
+          },
+          "valueType": "STRING",
+          "description": "iOS 최소 지원 버전 (x.y.z)"
+        },
+        "ios_latest_version": {
+          "defaultValue": {
+            "value": "1.0.0"
+          },
+          "valueType": "STRING",
+          "description": "iOS 최신 버전 (x.y.z)"
+        },
+        "android_store_url": {
+          "defaultValue": {
+            "value": ""
+          },
+          "valueType": "STRING",
+          "description": "비우면 패키지 이름으로 Play 스토어 링크 생성"
+        },
+        "ios_store_url": {
+          "defaultValue": {
+            "value": ""
+          },
+          "valueType": "STRING",
+          "description": "App Store 등록 후 https://apps.apple.com/app/id<번호> (비우면 iOS 선택 업데이트 안내 안 함)"
+        },
+        "update_message": {
+          "defaultValue": {
+            "value": ""
+          },
+          "valueType": "STRING",
+          "description": "업데이트 팝업 본문 (비우면 기본 문구)"
+        }
+      }
+    }
+  }
+}

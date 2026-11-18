@@ -2,18 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:likezzix/app.dart';
-import 'package:likezzix/models/ad_flags.dart';
+import 'package:likezzix/services/app_initializer.dart';
 import 'package:likezzix/providers/ad_providers.dart';
 import 'package:likezzix/providers/camera_providers.dart';
 import 'package:likezzix/screens/camera_screen.dart';
 import 'package:likezzix/screens/splash_screen.dart';
 
 void main() {
-  Widget app({Future<AdFlags> Function()? init}) => ProviderScope(
+  Widget app({Future<AppBootstrap> Function()? init}) => ProviderScope(
     overrides: [
       availableCamerasProvider.overrideWith((ref) async => []),
       appInitProvider.overrideWith(
-        (ref) => (init ?? () async => AdFlags.defaults)(),
+        (ref) => (init ?? () async => AppBootstrap.fallback)(),
       ),
     ],
     child: const LikeZzixApp(),
@@ -35,8 +35,10 @@ void main() {
   testWidgets('초기화가 오래 걸려도 최대 대기 후 넘어감', (tester) async {
     await tester.pumpWidget(
       app(
-        init: () =>
-            Future.delayed(const Duration(seconds: 30), () => AdFlags.defaults),
+        init: () => Future.delayed(
+          const Duration(seconds: 30),
+          () => AppBootstrap.fallback,
+        ),
       ),
     );
     await tester.pump(
