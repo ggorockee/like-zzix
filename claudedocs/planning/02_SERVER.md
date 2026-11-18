@@ -1,6 +1,38 @@
 # server/ - Go API 서버 설계
 
-> 기준: Go 1.26 / Fiber v3.7 · 원칙: **백엔드는 Go만 사용**
+> 기준: Go 1.26 / Fiber v2 · 원칙: **백엔드는 Go만 사용**, **모니터링되지 않는 것은 관리될 수 없다**
+
+## 0. 현재 구현 상태 (2026-11-18, S1 MVP 배포 완료)
+
+운영 중인 yen-back 서버와 같은 구조로 먼저 배포하고, DB·관리자 API는 admin 단계에서 추가한다. 아래 1~6장은 최종 목표 설계.
+
+| 항목 | 현재 | 최종 목표 |
+|------|------|-----------|
+| 프레임워크 | Fiber v2 (yen-back과 동일, 운영 검증된 adaptor·promhttp 조합) | 동일 유지 (v3 전환은 별도 검토) |
+| 프리셋 저장 | 이미지에 포함한 JSON (`internal/presets/presets.json` = 앱 번들 파일, 다르면 테스트 실패) | PostgreSQL (admin에서 등록) |
+| 배포 | `https://like-zzix.woohalabs.com`, GKE `like-zzix` 네임스페이스, ArgoCD 앱 `like-zzix` | 동일 |
+| 이미지 | Docker Hub `ggorockee/like-zzix-server`, CI가 main 머지 시 빌드 → infra 태그 PR 자동 머지 | 동일 |
+
+| Method | Path | 설명 |
+|--------|------|------|
+| GET | `/healthz`, `/readyz` | K8s probe, blackbox 외부 검사 |
+| GET | `/v1/presets` | 전체 프리셋 (ETag, `If-None-Match` → 304, `Cache-Control: public, max-age=300`) |
+| GET | `/v1/presets/:id` | 단건, 없으면 404 |
+| GET | `/v1/categories` | 프리셋이 있는 카테고리와 개수 |
+| POST | `/v1/events` | 앱 익명 사용 이벤트 묶음 (최대 40개, 허용 목록 외 거부) → 202 |
+| GET | `/privacy` | 개인정보처리방침 (web `/privacy` 전까지 스토어 등록용) |
+| GET | `/metrics` | 별도 포트 9090, VirtualService로 노출하지 않음 |
+
+| 지표 (`likezzix_`) | 라벨 | 용도 |
+|--------------------|------|------|
+| `http_requests_total`, `http_request_duration_seconds` | method, route(패턴), status | 요청 수·지연·5xx |
+| `app_requests_total` | platform, app_version | 앱 버전 분포 (강제 업데이트 후 구버전 잔존 확인) |
+| `app_events_total` | event, platform | 앱 실행, 프리셋 선택, Perfect Match, 저장/실패, 카메라 불가, 갤러리, 업데이트 팝업 반응 |
+| `preset_events_total` | event, preset | 촬영 퍼널 (선택 → Perfect Match → 저장), 카탈로그에 있는 프리셋만 |
+| `app_events_rejected_total` | reason | 앱·서버 허용 목록 불일치 감지 |
+| `build_info`, `presets` | version, commit | 배포 버전, 제공 프리셋 수 |
+
+라벨 상한 원칙: 원본 경로 대신 라우트 패턴, 허용 목록에 없는 이벤트는 거부, 모르는 프리셋은 라벨로 만들지 않음, semver가 아닌 버전은 `other`.
 
 ## 1. 역할
 
@@ -112,10 +144,12 @@ Remote Config / 광고 플래그는 Firebase Console에서 관리하므로 서�
 ## 7. 작업 체크리스트
 
 ### S1. 공개 API
-- [ ] `go mod init`, Fiber v3, 설정/로깅/graceful shutdown
-- [ ] goose 마이그레이션 + sqlc 설정
-- [ ] `/v1/categories`, `/v1/presets`, `/v1/presets/:id` + ETag
-- [ ] 통합 테스트 (testcontainers)
+- [x] `go mod init`, Fiber v2, 설정/slog JSON 로그/graceful shutdown, 메트릭 전용 포트
+- [x] `/v1/categories`, `/v1/presets`, `/v1/presets/:id` + ETag (임베드 JSON)
+- [x] `/v1/events` 앱 사용 이벤트 + 프리셋 퍼널 지표
+- [x] 단위·HTTP 테스트 (gofmt, vet, staticcheck, race)
+- [ ] goose 마이그레이션 + sqlc 설정 (admin 단계에서 DB 도입 시)
+- [ ] 통합 테스트 (testcontainers, DB 도입 시)
 
 ### S1.5 앱 인증 (마지막 단계, mobile M7과 계약 일치)
 - [ ] `users`, `user_identities`, `refresh_tokens` 마이그레이션
@@ -131,7 +165,10 @@ Remote Config / 광고 플래그는 Firebase Console에서 관리하므로 서�
 - [ ] presigned 업로드 URL
 - [ ] CORS: admin 도메인만 허용
 
-### S3. 배포
-- [ ] Dockerfile (멀티스테이지, alpine, non-root)
-- [ ] `deployment.yaml`, `service.yaml`, `ingress.yaml`
-- [ ] 클러스터 선택 확정 (EKS / GKE)
+### S3. 배포 (infra PR #1178)
+- [x] Dockerfile (멀티스테이지, distroless non-root, 12MB)
+- [x] infra 차트 `charts/helm/prod/like-zzix` (Deployment, Service, ConfigMap, ServiceMonitor) + ArgoCD `apps-like-zzix-cfg.yaml`
+- [x] Istio VirtualService `like-zzix.woohalabs.com` (기존 와일드카드 인증서·DNS)
+- [x] 클러스터: 기존 GKE `woohalabs-prod-gke`
+- [x] CI: lint·test → 이미지 푸시 → infra 태그 PR 자동 머지 (`.github/workflows/ci-server.yml`)
+- [x] 모니터링: Grafana `like-zzix` 대시보드, 알림 `like-zzix.server`·`like-zzix.app`, blackbox 외부 검사 (`06_OPERATIONS.md`)
