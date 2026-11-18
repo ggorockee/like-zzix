@@ -3,3 +3,9 @@
 
 // Google 테스트 AdMob App ID
 ADMOB_APP_ID = ca-app-pub-3940256099942544~1458002511
+
+// Kakao 네이티브 앱 키 (URL 스킴 kakao{키})
+KAKAO_NATIVE_APP_KEY = unset
+
+// Google iOS 클라이언트 ID를 뒤집은 값 (com.googleusercontent.apps.xxxx)
+GOOGLE_REVERSED_CLIENT_ID = com.googleusercontent.apps.unset

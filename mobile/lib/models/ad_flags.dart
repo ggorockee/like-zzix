@@ -22,6 +22,9 @@ class AdFlags {
     interstitialAdInterval: RemoteConfigKeys.defaultInterstitialAdInterval,
   );
 
+  /// 모든 광고 OFF (광고 면제 계정용). 간격 값은 사용되지 않음.
+  static const disabled = defaults;
+
   final bool showNativeAd;
   final bool showInterstitialAd;
   final bool showRewardedAd;

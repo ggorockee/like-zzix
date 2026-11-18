@@ -11,12 +11,14 @@ plugins {
 
 // 네이티브 설정값은 커밋하지 않는 android/local.properties에서 읽는다.
 // - admob.appId: 없으면 Google 테스트 App ID
+// - kakao.nativeAppKey: 없으면 "unset" (카카오 로그인 비활성 빌드)
 val localProperties = Properties().apply {
     val file = rootProject.file("local.properties")
     if (file.exists()) file.inputStream().use { load(it) }
 }
 val admobAppId: String =
     localProperties.getProperty("admob.appId") ?: "ca-app-pub-3940256099942544~3347511713"
+val kakaoNativeAppKey: String = localProperties.getProperty("kakao.nativeAppKey") ?: "unset"
 
 android {
     namespace = "com.woohalabs.likezzix"
@@ -42,6 +44,7 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         manifestPlaceholders["admobAppId"] = admobAppId
+        manifestPlaceholders["kakaoNativeAppKey"] = kakaoNativeAppKey
     }
 
     buildTypes {

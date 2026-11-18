@@ -3,17 +3,23 @@ import 'package:firebase_remote_config/firebase_remote_config.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart';
 
 import 'app.dart';
+import 'core/env.dart';
 import 'models/ad_flags.dart';
 import 'providers/ad_providers.dart';
 import 'services/remote_config_service.dart';
 
-/// 초기화 순서: 바인딩 → 세로 고정 → Firebase → Remote Config → ProviderScope.
+/// 초기화 순서: 바인딩 → 세로 고정 → Kakao SDK → Firebase → Remote Config → ProviderScope.
 /// 광고 SDK는 첫 광고 요청 직전에 AdService가 지연 초기화한다 (동의/ATT 포함).
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+
+  if (Env.kakaoNativeAppKey.isNotEmpty) {
+    await KakaoSdk.init(nativeAppKey: Env.kakaoNativeAppKey);
+  }
 
   final adFlags = await _loadAdFlags();
 

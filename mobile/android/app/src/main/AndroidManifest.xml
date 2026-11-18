@@ -30,6 +30,17 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- 카카오 로그인 리다이렉트 (kakao{네이티브 앱 키}://oauth) -->
+        <activity
+            android:name="com.kakao.sdk.flutter.AuthCodeCustomTabsActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="kakao${kakaoNativeAppKey}" android:host="oauth" />
+            </intent-filter>
+        </activity>
         <!-- AdMob App ID: android/local.properties의 admob.appId (없으면 Google 테스트 ID) -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
@@ -50,5 +61,7 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+        <!-- 카카오톡 설치 여부 확인 -->
+        <package android:name="com.kakao.talk" />
     </queries>
 </manifest>
