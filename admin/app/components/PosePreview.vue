@@ -41,12 +41,17 @@ function draw() {
   if (!c) return
   const width = 480
   const height = Math.round(width / ratio.value)
-  c.width = width * 2
-  c.height = height * 2
+  // 고해상도 화면에서 흐려지지 않게 기기 픽셀 비율만큼 그린다
+  const dpr = Math.min(3, Math.max(2, window.devicePixelRatio || 1))
+  c.width = Math.round(width * dpr)
+  c.height = Math.round(height * dpr)
+  // 높이를 px로 고정하면 화면이 좁을 때 max-w-full로 폭만 줄어 사진이 가로로 찌그러진다.
+  // 높이는 auto로 두어 캔버스 고유 비율(width/height 속성)을 그대로 따르게 한다.
   c.style.width = `${width}px`
-  c.style.height = `${height}px`
+  c.style.height = 'auto'
   const ctx = c.getContext('2d')!
-  ctx.setTransform(2, 0, 0, 2, 0, 0)
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+  ctx.imageSmoothingQuality = 'high'
   ctx.fillStyle = '#18181b'
   ctx.fillRect(0, 0, width, height)
 
