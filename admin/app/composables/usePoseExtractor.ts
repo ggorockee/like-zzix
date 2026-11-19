@@ -51,18 +51,14 @@ export function usePoseExtractor() {
     try {
       const lm = await getLandmarker()
       return await new Promise<PoseExtraction>((resolve, reject) => {
-        lm.detect(image, (result) => {
-          // 마스크는 콜백 안에서만 유효하므로 여기서 모두 꺼낸다
-          const pose = result.landmarks[0]
-          const mask = result.segmentationMasks?.[0]
-          if (!pose || !mask) {
-            reject(new Error('사진에서 사람을 찾지 못했습니다. 전신 또는 상반신이 잘 보이는 사진을 써 주세요.'))
-            return
-          }
-          const landmarks = pose.map(p => [round4(p.x), round4(p.y), round3(p.visibility ?? 0)] as [number, number, number])
-          const outline = maskToOutline(mask.getAsFloat32Array(), mask.width, mask.height)
-          resolve({ landmarks, outline, visible: landmarks.filter(l => l[2] >= 0.5).length })
-        })
+        try {
+          detectInto(lm, image, resolve, reject)
+        } catch (e) {
+          // WASM이 중단(Aborted)되면 이 인스턴스는 다시 쓸 수 없으므로 다음 시도에서 새로 만든다
+          landmarker = null
+          console.error('pose extraction failed', e)
+          reject(new Error('포즈 추출 중 오류가 발생했습니다. 다른 사진으로 다시 시도하거나 페이지를 새로고침해 주세요.'))
+        }
       })
     } finally {
       loading.value = false
@@ -70,6 +66,26 @@ export function usePoseExtractor() {
   }
 
   return { extract, loading }
+}
+
+function detectInto(
+  lm: PoseLandmarker,
+  image: HTMLCanvasElement,
+  resolve: (r: PoseExtraction) => void,
+  reject: (e: Error) => void
+) {
+  lm.detect(image, (result) => {
+    // 마스크는 콜백 안에서만 유효하므로 여기서 모두 꺼낸다
+    const pose = result.landmarks[0]
+    const mask = result.segmentationMasks?.[0]
+    if (!pose || !mask) {
+      reject(new Error('사진에서 사람을 찾지 못했습니다. 전신 또는 상반신이 잘 보이는 사진을 써 주세요.'))
+      return
+    }
+    const landmarks = pose.map(p => [round4(p.x), round4(p.y), round3(p.visibility ?? 0)] as [number, number, number])
+    const outline = maskToOutline(mask.getAsFloat32Array(), mask.width, mask.height)
+    resolve({ landmarks, outline, visible: landmarks.filter(l => l[2] >= 0.5).length })
+  })
 }
 
 /** MediaPipe 웹 라이브러리는 CPU 모드에서도 WebGL로 이미지를 변환한다 */

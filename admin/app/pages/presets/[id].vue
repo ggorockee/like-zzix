@@ -19,6 +19,7 @@ const opacity = ref(0.4)
 const showJoints = ref(true)
 const saving = ref(false)
 const extractError = ref('')
+const fileInput = ref<HTMLInputElement>()
 const extractInfo = ref('')
 const confirmDelete = ref(false)
 
@@ -92,7 +93,7 @@ async function save() {
     }
     toast.add({
       title: '저장했습니다',
-      description: row.value?.status === 'published' ? '공개 중인 프리셋이라 앱에 바로 반영됩니다.' : '아직 비공개입니다. 목록에서 공개로 바꾸면 앱에 보입니다.',
+      description: row.value?.status === 'published' ? '공개 중인 프리셋이라 앱에 바로 반영됩니다.' : '아직 비공개입니다. 오른쪽 위 [앱에 공개]를 누르면 앱에 보입니다.',
       color: 'success'
     })
     if (isNew.value) {
@@ -195,23 +196,22 @@ onBeforeUnmount(() => {
               직접 촬영했거나 사용 권한이 있는 사진만 올려 주세요. 사진에서 관절과 인물 외곽선을 브라우저에서 바로 추출합니다.
             </p>
           </template>
-          <label class="block">
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              class="hidden"
-              :disabled="extracting"
-              @change="onFile"
-            >
-            <span class="inline-flex">
-              <UButton
-                as="span"
-                icon="i-lucide-upload"
-                :loading="extracting"
-                :label="extracting ? '포즈 추출 중… (처음엔 모델을 받느라 10초 정도 걸려요)' : '사진 선택'"
-              />
-            </span>
-          </label>
+          <input
+            ref="fileInput"
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            class="hidden"
+            :disabled="extracting"
+            @change="onFile"
+          >
+          <!-- 실제 버튼이라 키보드(Tab·Enter)로도 사진을 고를 수 있다 -->
+          <UButton
+            icon="i-lucide-upload"
+            :loading="extracting"
+            :disabled="extracting"
+            :label="extracting ? '포즈 추출 중… (처음엔 모델을 받느라 10초 정도 걸려요)' : '사진 선택'"
+            @click="fileInput?.click()"
+          />
           <p
             v-if="extractInfo"
             class="mt-3 text-sm text-success"
