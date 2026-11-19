@@ -385,6 +385,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
         cameras.any((c) => c.lensDirection == CameraLensDirection.back) &&
         cameras.any((c) => c.lensDirection == CameraLensDirection.front);
     final controller = _controller;
+    final backdrop = ref.watch(cameraBackdropProvider);
     _screenSize = MediaQuery.sizeOf(context);
     ref.listen(selectedPresetProvider, (_, _) => unawaited(_syncPoseStream()));
 
@@ -393,19 +394,21 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       body: Stack(
         children: [
           Positioned.fill(
-            child: controller != null
-                ? GestureDetector(
-                    // 두 손가락 핀치 줌
-                    behavior: HitTestBehavior.opaque,
-                    onScaleStart: (_) => _pinchStartZoom = _zoom,
-                    onScaleUpdate: (d) {
-                      if (d.pointerCount >= 2) {
-                        _setZoom(_pinchStartZoom * d.scale);
-                      }
-                    },
-                    child: CameraPreviewFullscreen(controller: controller),
-                  )
-                : _CameraFallback(issue: _issue, onRetry: _startCamera),
+            child:
+                backdrop ??
+                (controller != null
+                    ? GestureDetector(
+                        // 두 손가락 핀치 줌
+                        behavior: HitTestBehavior.opaque,
+                        onScaleStart: (_) => _pinchStartZoom = _zoom,
+                        onScaleUpdate: (d) {
+                          if (d.pointerCount >= 2) {
+                            _setZoom(_pinchStartZoom * d.scale);
+                          }
+                        },
+                        child: CameraPreviewFullscreen(controller: controller),
+                      )
+                    : _CameraFallback(issue: _issue, onRetry: _startCamera)),
           ),
           if (preset != null) ...[
             Positioned.fill(
@@ -447,9 +450,12 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                 const Spacer(),
                 _GuideStatusLayer(hasPreset: preset != null),
                 const SizedBox(height: 12),
-                if (controller != null)
+                if (controller != null || backdrop != null)
                   ZoomSelector(
-                    range: _zoomRange,
+                    // 스크린샷 모드는 일반 휴대폰과 같은 0.5~3배 표시
+                    range: backdrop != null
+                        ? const ZoomRange(0.5, 3)
+                        : _zoomRange,
                     zoom: _zoom,
                     onSelected: _setZoom,
                   ),
@@ -460,7 +466,11 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                   preset: preset,
                   capturing: _capturing,
                   onPresetTap: () => showPresetBottomSheet(context),
-                  onShutter: controller == null || _switching ? null : _capture,
+                  onShutter: backdrop != null
+                      ? () {}
+                      : controller == null || _switching
+                      ? null
+                      : _capture,
                   onSwitchLens: hasBothLenses && !_capturing && !_switching
                       ? _switchLens
                       : null,
