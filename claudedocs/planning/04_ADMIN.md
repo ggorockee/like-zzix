@@ -99,4 +99,5 @@
 - [x] Dockerfile / nginx / CI(`ci-admin.yml`: 검사 → 이미지 → infra `admin.image.tag` PR)
 - [x] infra: Terraform DB·사용자, ExternalSecret, 관리자 Deployment·Service, VirtualService, blackbox, 대시보드·알림
 - [x] GSM `prod-like-zzix-credentials` 생성 (2026-11-19 확인: ExternalSecret `SecretSynced`, DB·ADMIN_EMAILS·GOOGLE_CLIENT_ID 주입)
-- [ ] OAuth 웹 클라이언트(yanggo-514212, woohalabs11 계정)에 승인된 JS 출처 `https://like-zzix-admin.woohalabs.com` 추가 — 2026-11-19 확인: 미등록이라 Google 로그인 버튼이 403 `The given origin is not allowed for the given client ID` → 로그인 불가
+- [x] OAuth 웹 클라이언트(yanggo-514212, woohalabs11 계정)에 승인된 JS 출처 `https://like-zzix-admin.woohalabs.com` 추가 (2026-11-19). 동의 화면이 "테스트 중"이라 테스트 사용자(현재 woohaen88)만 로그인 가능 → 다른 관리자 계정은 대상 > 테스트 사용자에 추가 필요
+- [x] 포즈 추출 중단 수정: MediaPipe(CPU·마스크)는 입력 폭이 4의 배수가 아니면 WASM이 Aborted → `fitSize`로 폭을 4의 배수로 맞춤 (원본 사진 4장 E2E 통과)
