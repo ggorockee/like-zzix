@@ -1,7 +1,7 @@
 """스토어 등록용 이미지 생성.
 
 입력: build/store_screenshots/*.png (integration_test/store_screenshots_test.dart 결과, 1320x2868)
-출력: store/ios/*.png (App Store 6.9", 1320x2868)
+출력: store/ios/*.png (App Store iPhone 6.3", 1206x2622 — App Store Connect 기본 요구 크기)
       store/android/*.png (Play 휴대전화 스크린샷 1080x1920, 그래픽 이미지 1024x500, 아이콘 512x512)
 
 실행 (mobile 폴더에서): uv run --with pillow python tool/store_assets.py
@@ -112,7 +112,7 @@ def main() -> None:
     OUT_ANDROID.mkdir(parents=True, exist_ok=True)
     for name, title, subtitle in SLIDES:
         shot = SHOTS / f"{name}.png"
-        slide(shot, title, subtitle, 1320, 2868).save(OUT_IOS / f"{name}.png", optimize=True)
+        slide(shot, title, subtitle, 1206, 2622).save(OUT_IOS / f"{name}.png", optimize=True)
         slide(shot, title, subtitle, 1080, 1920).save(OUT_ANDROID / f"{name}.png", optimize=True)
     feature_graphic().save(OUT_ANDROID / "feature_graphic.png", optimize=True)
     Image.open(ICON).convert("RGB").resize((512, 512), Image.LANCZOS).save(OUT_ANDROID / "icon_512.png", optimize=True)
