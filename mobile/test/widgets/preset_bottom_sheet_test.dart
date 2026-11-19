@@ -52,22 +52,25 @@ void main() {
 
     expect(find.byType(NativeAdTile), findsNothing);
     expect(find.byType(CreateFromPhotoItem), findsOneWidget);
-    // 첫 칸(내 사진) 다음부터 순서대로 → 5번째 칸 = presets[3]
+    // 첫 칸(내 사진) 다음부터 번들 프리셋이 순서대로 모두 채워짐
     final items = tester
         .widgetList<PresetGridItem>(find.byType(PresetGridItem))
+        .map((w) => w.preset)
         .toList();
-    expect(items[3].preset, presets[3]);
+    expect(items, presets);
   });
 
   testWidgets('카테고리 필터', (tester) async {
     await pumpSheet(tester);
-    await tester.tap(find.widgetWithText(ChoiceChip, '부르고 찍기'));
+    // 프리셋이 없는 카테고리는 칩이 없음
+    expect(find.widgetWithText(ChoiceChip, '부르고 찍기'), findsNothing);
+    await tester.tap(find.widgetWithText(ChoiceChip, '음료·카페'));
     await tester.pumpAndSettle();
 
     final shown = tester
         .widgetList<PresetGridItem>(find.byType(PresetGridItem))
         .map((w) => w.preset.title);
-    expect(shown, ['부르고 찍기']);
+    expect(shown, ['음료 마시는 컷']);
   });
 
   testWidgets('프리셋을 고르면 선택되고 시트가 닫힘, 다시 고르면 해제', (tester) async {

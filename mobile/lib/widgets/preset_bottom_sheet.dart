@@ -72,6 +72,11 @@ class _PresetBottomSheetState extends ConsumerState<PresetBottomSheet> {
         children: [
           const _Handle(),
           _CategoryChips(
+            // 프리셋이 있는 카테고리만 칩으로 보여준다 (빈 카테고리 칩 방지)
+            categories: [
+              for (final c in PresetCategory.values)
+                if (presets.value?.any((p) => p.category == c) ?? false) c,
+            ],
             selected: _category,
             onSelected: (c) => setState(() => _category = c),
           ),
@@ -159,8 +164,13 @@ class _Handle extends StatelessWidget {
 }
 
 class _CategoryChips extends StatelessWidget {
-  const _CategoryChips({required this.selected, required this.onSelected});
+  const _CategoryChips({
+    required this.categories,
+    required this.selected,
+    required this.onSelected,
+  });
 
+  final List<PresetCategory> categories;
   final PresetCategory? selected;
   final ValueChanged<PresetCategory?> onSelected;
 
@@ -172,7 +182,7 @@ class _CategoryChips extends StatelessWidget {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
         children: [
-          for (final category in [null, ...PresetCategory.values])
+          for (final category in [null, ...categories])
             Padding(
               padding: const EdgeInsets.only(right: 8),
               child: ChoiceChip(
