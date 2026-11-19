@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
+	"golang.org/x/crypto/bcrypt"
 
 	"github.com/ggorockee/like-zzix/server/internal/admin"
 	"github.com/ggorockee/like-zzix/server/internal/catalog"
@@ -37,7 +38,7 @@ type adminEnv struct {
 	cookie string
 }
 
-func newAdminEnv(t *testing.T) *adminEnv {
+func newAdminEnv(t *testing.T, mods ...func(*AdminOptions)) *adminEnv {
 	t.Helper()
 	embedded, err := presets.Load()
 	if err != nil {
@@ -59,12 +60,16 @@ func newAdminEnv(t *testing.T) *adminEnv {
 	}
 	allow := admin.ParseAllowlist("boss@example.com")
 	quiet := slog.New(slog.NewTextHandler(io.Discard, nil))
-	app := New(holder, Options{Metrics: m, Store: st, Log: quiet, Admin: &AdminOptions{
+	opt := &AdminOptions{
 		Store: st, Verifier: fakeVerifier{}, Allowlist: allow,
 		Sessions: &admin.Sessions{Store: st, TTL: 3600e9},
 		Origin:   "https://like-zzix-admin.woohalabs.com", GoogleClientID: "cid", CookieSecure: true,
 		LoginLimit: 3,
-	}})
+	}
+	for _, mod := range mods {
+		mod(opt)
+	}
+	app := New(holder, Options{Metrics: m, Store: st, Log: quiet, Admin: opt})
 	return &adminEnv{app: app, store: st, m: m, allow: allow}
 }
 
@@ -304,5 +309,55 @@ func TestEventsBodyLimitStillApplies(t *testing.T) {
 	big := `{"events":[{"name":"app_open","count":1,"preset":"` + strings.Repeat("x", 20000) + `"}]}`
 	if res, _ := e.do(t, "POST", "/v1/events", big); res.StatusCode != 413 {
 		t.Fatalf("oversized events: %d", res.StatusCode)
+	}
+}
+
+func TestAdminPasswordLogin(t *testing.T) {
+	e := newAdminEnv(t)
+	if res, _ := e.do(t, "POST", "/admin/v1/auth/password", `{"id":"admin","password":"x"}`); res.StatusCode != 404 && res.StatusCode != 405 {
+		t.Fatalf("password login must not exist unless configured: %d", res.StatusCode)
+	}
+
+	hash, _ := bcrypt.GenerateFromPassword([]byte("correct horse"), bcrypt.MinCost)
+	pw, err := admin.NewPasswordLogin("admin", string(hash))
+	if err != nil {
+		t.Fatal(err)
+	}
+	e = newAdminEnv(t, func(o *AdminOptions) {
+		o.Password = pw
+		o.Allowlist["admin"] = true
+	})
+
+	if _, body := e.do(t, "GET", "/admin/v1/config", ""); !strings.Contains(body, `"password_login":true`) {
+		t.Fatalf("config: %s", body)
+	}
+	for _, body := range []string{`{"id":"admin","password":"wrong"}`, `{"id":"root","password":"correct horse"}`} {
+		if res, _ := e.do(t, "POST", "/admin/v1/auth/password", body); res.StatusCode != 401 {
+			t.Fatalf("%s: %d", body, res.StatusCode)
+		}
+	}
+	res, _ := e.do(t, "POST", "/admin/v1/auth/password", `{"id":"admin","password":"correct horse"}`)
+	if res.StatusCode != 200 {
+		t.Fatalf("login: %d", res.StatusCode)
+	}
+	for _, c := range res.Cookies() {
+		if c.Name == sessionCookie {
+			e.cookie = c.Name + "=" + c.Value
+		}
+	}
+	if res, body := e.do(t, "GET", "/admin/v1/me", ""); res.StatusCode != 200 || !strings.Contains(body, `"admin"`) {
+		t.Fatalf("me: %d %s", res.StatusCode, body)
+	}
+	if !strings.Contains(scrape(t, e.m), `likezzix_admin_logins_total{result="invalid_password"} 2`) {
+		t.Error("invalid_password metric missing")
+	}
+}
+
+func TestNewPasswordLoginRejectsPlaintext(t *testing.T) {
+	if _, err := admin.NewPasswordLogin("admin", "plaintext"); err == nil {
+		t.Fatal("plaintext must be rejected")
+	}
+	if p, err := admin.NewPasswordLogin("", ""); p != nil || err != nil {
+		t.Fatal("empty config disables password login")
 	}
 }

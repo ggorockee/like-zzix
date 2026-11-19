@@ -32,6 +32,8 @@ type AdminOptions struct {
 	GoogleClientID string
 	// CookieSecure must be true in production (HTTPS).
 	CookieSecure bool
+	// Password enables POST /admin/v1/auth/password (break-glass ID/PW account); nil disables it.
+	Password *admin.PasswordLogin
 	// DevEmail enables POST /admin/v1/auth/dev for local development only. Never set in production.
 	DevEmail string
 	// LoginLimit is login attempts per minute per IP (default 5).
@@ -66,6 +68,7 @@ func mountAdmin(app *fiber.App, holder *catalog.Holder, m *telemetry.Metrics, lo
 			"google_client_id": opt.GoogleClientID,
 			"categories":       presets.CategoryIDs(),
 			"dev_login":        opt.DevEmail != "",
+			"password_login":   opt.Password != nil,
 		})
 	})
 
@@ -93,6 +96,24 @@ func mountAdmin(app *fiber.App, holder *catalog.Holder, m *telemetry.Metrics, lo
 		}
 		return startSession(c, m, log, opt, email)
 	})
+	if opt.Password != nil {
+		g.Post("/auth/password", loginLimiter, func(c *fiber.Ctx) error {
+			var req struct {
+				ID       string `json:"id"`
+				Password string `json:"password"`
+			}
+			if err := c.BodyParser(&req); err != nil || req.ID == "" || req.Password == "" {
+				m.AdminLogin("invalid_password")
+				return fiber.NewError(fiber.StatusBadRequest, "id and password are required")
+			}
+			if !opt.Password.Check(strings.TrimSpace(req.ID), req.Password) {
+				m.AdminLogin("invalid_password")
+				log.Warn("admin login rejected", "reason", "invalid_password")
+				return fiber.NewError(fiber.StatusUnauthorized, "invalid id or password")
+			}
+			return startSession(c, m, log, opt, opt.Password.ID)
+		})
+	}
 	if opt.DevEmail != "" {
 		g.Post("/auth/dev", func(c *fiber.Ctx) error {
 			return startSession(c, m, log, opt, opt.DevEmail)

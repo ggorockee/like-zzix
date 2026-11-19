@@ -83,7 +83,7 @@ func New(version, commit string) *Metrics {
 	}, []string{"status"})
 	m.adminLogins = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: namespace, Name: "admin_logins_total",
-		Help: "Admin console login attempts (success, not_allowed, invalid_token, rate_limited).",
+		Help: "Admin console login attempts (success, not_allowed, invalid_token, invalid_password, rate_limited).",
 	}, []string{"result"})
 	m.adminChanges = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: namespace, Name: "admin_changes_total",
@@ -121,7 +121,7 @@ func New(version, commit string) *Metrics {
 	for _, r := range []string{"malformed", "batch_size", "unknown_event", "invalid_count"} {
 		m.eventsReject.WithLabelValues(r)
 	}
-	for _, r := range []string{"success", "not_allowed", "invalid_token", "rate_limited"} {
+	for _, r := range []string{"success", "not_allowed", "invalid_token", "invalid_password", "rate_limited"} {
 		m.adminLogins.WithLabelValues(r)
 	}
 	for _, a := range []string{"create", "update", "delete", "publish", "unpublish", "image"} {

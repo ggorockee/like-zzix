@@ -1,5 +1,5 @@
 export interface AdminUser { email: string }
-export interface AdminConfig { google_client_id: string, categories: string[], dev_login: boolean }
+export interface AdminConfig { google_client_id: string, categories: string[], dev_login: boolean, password_login: boolean }
 
 export function useAuth() {
   const user = useState<AdminUser | null>('admin-user', () => null)
@@ -21,6 +21,11 @@ export function useAuth() {
     user.value = await api<AdminUser>('/admin/v1/auth/google', { method: 'POST', body: { credential } })
   }
 
+  /** Google을 쓸 수 없을 때를 위한 아이디/비밀번호 로그인 (서버에 설정된 경우만) */
+  async function loginWithPassword(id: string, password: string) {
+    user.value = await api<AdminUser>('/admin/v1/auth/password', { method: 'POST', body: { id, password } })
+  }
+
   /** 로컬 개발 전용 (서버가 APP_ENV=local일 때만 존재) */
   async function devLogin() {
     user.value = await api<AdminUser>('/admin/v1/auth/dev', { method: 'POST' })
@@ -35,5 +40,5 @@ export function useAuth() {
     }
   }
 
-  return { user, checked, refresh, loginWithGoogle, devLogin, logout }
+  return { user, checked, refresh, loginWithGoogle, loginWithPassword, devLogin, logout }
 }
