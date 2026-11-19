@@ -9,7 +9,7 @@ void main() {
     final raw = File(PresetRepository.bundledAsset).readAsStringSync();
     final presets = PresetRepository.parse(raw);
 
-    expect(presets.length, greaterThanOrEqualTo(4));
+    expect(presets.length, greaterThanOrEqualTo(2));
     for (final p in presets) {
       expect(p.landmarks, hasLength(PoseIndex.count), reason: p.id);
       expect(p.title, isNotEmpty);
@@ -26,14 +26,14 @@ void main() {
     expect(presets.map((p) => p.id).toSet(), hasLength(presets.length));
   });
 
-  test('번들 프리셋: 모든 카테고리가 최소 1개', () {
+  test('번들 프리셋: 출시용 2개(전신샷·음료) + 번들 사진 존재', () {
     final presets = PresetRepository.parse(
       File(PresetRepository.bundledAsset).readAsStringSync(),
     );
-    expect(
-      presets.map((p) => p.category).toSet(),
-      PresetCategory.values.toSet(),
-    );
+    expect(presets.map((p) => p.id), ['full-body-low-angle', 'drink-cafe']);
+    for (final p in presets) {
+      expect(File(p.referenceAsset!).existsSync(), isTrue, reason: p.id);
+    }
   });
 
   test('랜드마크 수가 33이 아닌 항목은 건너뜀', () {
