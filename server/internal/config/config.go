@@ -28,6 +28,8 @@ type Config struct {
 	AdminEmails    string // ADMIN_EMAILS: comma-separated superuser allowlist
 	GoogleClientID string // GOOGLE_CLIENT_ID: OAuth web client used by the console login
 	AdminOrigin    string // ADMIN_ORIGIN: console origin for CORS
+	AdminLoginID   string // ADMIN_LOGIN_ID: break-glass ID/PW account (with ADMIN_PASSWORD_HASH)
+	AdminPassHash  string // ADMIN_PASSWORD_HASH: bcrypt hash of that account's password
 	AdminDevEmail  string // ADMIN_DEV_EMAIL: local-only password-less login (APP_ENV=local)
 }
 
@@ -47,6 +49,8 @@ func Load() (Config, error) {
 		AdminEmails:      os.Getenv("ADMIN_EMAILS"),
 		GoogleClientID:   os.Getenv("GOOGLE_CLIENT_ID"),
 		AdminOrigin:      os.Getenv("ADMIN_ORIGIN"),
+		AdminLoginID:     os.Getenv("ADMIN_LOGIN_ID"),
+		AdminPassHash:    os.Getenv("ADMIN_PASSWORD_HASH"),
 		AdminDevEmail:    os.Getenv("ADMIN_DEV_EMAIL"),
 	}
 	if c.MetricsPort == c.Port {
@@ -79,8 +83,9 @@ func (c Config) DatabaseURL() string {
 // AdminEnabled reports whether the admin API can run (needs storage and a login method).
 func (c Config) AdminEnabled() bool {
 	hasStore := c.HasDatabase() || c.Local()
-	hasLogin := c.GoogleClientID != "" || c.AdminDevEmail != ""
-	return hasStore && hasLogin && c.AdminEmails != ""
+	hasPassword := c.AdminLoginID != "" && c.AdminPassHash != ""
+	hasLogin := c.GoogleClientID != "" || c.AdminDevEmail != "" || hasPassword
+	return hasStore && hasLogin && (c.AdminEmails != "" || hasPassword)
 }
 
 func getenv(key, def string) string {

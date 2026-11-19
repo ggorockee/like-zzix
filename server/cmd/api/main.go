@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -159,7 +160,14 @@ func newAdmin(ctx context.Context, cfg config.Config, st store.Store) (*httpapi.
 		}
 		verifier = v
 	}
+	password, err := admin.NewPasswordLogin(cfg.AdminLoginID, cfg.AdminPassHash)
+	if err != nil {
+		return nil, err
+	}
 	allow := admin.ParseAllowlist(cfg.AdminEmails)
+	if password != nil {
+		allow[strings.ToLower(password.ID)] = true
+	}
 	if cfg.AdminDevEmail != "" {
 		allow[cfg.AdminDevEmail] = true
 	}
@@ -171,6 +179,7 @@ func newAdmin(ctx context.Context, cfg config.Config, st store.Store) (*httpapi.
 		Origin:         cfg.AdminOrigin,
 		GoogleClientID: cfg.GoogleClientID,
 		CookieSecure:   !cfg.Local(),
+		Password:       password,
 		DevEmail:       cfg.AdminDevEmail,
 	}, nil
 }

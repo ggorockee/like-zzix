@@ -9,7 +9,8 @@
 
 | 기능 | 현재 구현 |
 |------|------|
-| 로그인 | Google 로그인(GSI 버튼) → `POST /admin/v1/auth/google`(ID 토큰 검증) → `ADMIN_EMAILS` 허용 목록에 있는 이메일만 세션 쿠키 발급. 비밀번호 없음 |
+| 로그인 | "Google로 로그인" 버튼 → OpenID Connect 리디렉션(`response_type=id_token`, state·nonce 확인) → `/login#id_token=...` → `POST /admin/v1/auth/google`(ID 토큰 검증) → `ADMIN_EMAILS` 허용 목록에 있는 이메일만 세션 쿠키 발급. Google 기본 버튼은 로그인된 계정 이름을 표시해서 쓰지 않음 |
+| 예비 로그인 | 아이디/비밀번호 1개 계정 (`ADMIN_LOGIN_ID`, `ADMIN_PASSWORD_HASH`=bcrypt, GSM 보관). 둘 다 있을 때만 `POST /admin/v1/auth/password`가 열리고 화면에 입력칸이 보임. 로그인 시도 제한(분당 5회) 공유, 실패는 `invalid_password` 지표. 해시는 `go run ./cmd/hashpw`(표준 입력으로 비밀번호)로 만든다 |
 | 프리셋 목록 | 사진 썸네일, 카테고리, 앱 공개 스위치, 정렬 순서, 최근 수정(시각·관리자) |
 | 프리셋 편집기 | 사진 선택 → 긴 변 1080px JPEG로 축소(1.5MB 이하) → MediaPipe로 관절 33개·인물 마스크 추출 → 외곽선(폐곡선) 생성 → 미리보기 → ID·제목·카테고리·팁·권장 각도·단계별 가이드 입력 → 저장 |
 | 앱 미리보기 | 앱 카메라 화면과 같은 방식: 사진(투명도 조절, 기본 40%) + 흰색 인물 외곽선 + 비교 관절 13개 |
@@ -55,7 +56,7 @@
 
 | 경로 | 내용 |
 |------|------|
-| `app/pages/login.vue` | Google 로그인 버튼, 로컬에서는 개발용 로그인 |
+| `app/pages/login.vue` | Google로 로그인 버튼, 아이디/비밀번호 로그인, 로컬에서는 개발용 로그인 |
 | `app/pages/presets/index.vue` | 목록 (`UTable` + `USwitch`) |
 | `app/pages/presets/[id].vue` | 편집기 (`new` = 새 프리셋) |
 | `app/components/PosePreview.vue` | 사진+외곽선+관절 Canvas 미리보기 |
@@ -100,4 +101,6 @@
 - [x] infra: Terraform DB·사용자, ExternalSecret, 관리자 Deployment·Service, VirtualService, blackbox, 대시보드·알림
 - [x] GSM `prod-like-zzix-credentials` 생성 (2026-11-19 확인: ExternalSecret `SecretSynced`, DB·ADMIN_EMAILS·GOOGLE_CLIENT_ID 주입)
 - [x] OAuth 웹 클라이언트(yanggo-514212, woohalabs11 계정)에 승인된 JS 출처 `https://like-zzix-admin.woohalabs.com` 추가 (2026-11-19). 동의 화면이 "테스트 중"이라 테스트 사용자(현재 woohaen88)만 로그인 가능 → 다른 관리자 계정은 대상 > 테스트 사용자에 추가 필요
+- [x] 같은 OAuth 클라이언트에 승인된 리디렉션 URI `https://like-zzix-admin.woohalabs.com/login` 추가 (2026-11-19)
+- [x] GSM `prod-like-zzix-credentials`에 `ADMIN_LOGIN_ID`·`ADMIN_PASSWORD_HASH` 추가, 원문 비밀번호는 별도 시크릿 `prod-like-zzix-admin-password`에 보관
 - [x] 포즈 추출 중단 수정: MediaPipe(CPU·마스크)는 입력 폭이 4의 배수가 아니면 WASM이 Aborted → `fitSize`로 폭을 4의 배수로 맞춤 (원본 사진 4장 E2E 통과)
