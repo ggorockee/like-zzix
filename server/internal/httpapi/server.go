@@ -42,6 +42,9 @@ type eventsRequest struct {
 //go:embed privacy.html
 var privacyHTML []byte
 
+//go:embed support.html
+var supportHTML []byte
+
 // New builds the public API (and the admin API when opt.Admin is set).
 func New(holder *catalog.Holder, opt Options) *fiber.App {
 	if opt.Metrics == nil {
@@ -149,6 +152,13 @@ func New(holder *catalog.Holder, opt Options) *fiber.App {
 		c.Set(fiber.HeaderContentType, fiber.MIMETextHTMLCharsetUTF8)
 		c.Set(fiber.HeaderCacheControl, "public, max-age=3600")
 		return c.Send(privacyHTML)
+	})
+
+	// 스토어 등록 "지원 URL"
+	app.Get("/support", func(c *fiber.Ctx) error {
+		c.Set(fiber.HeaderContentType, fiber.MIMETextHTMLCharsetUTF8)
+		c.Set(fiber.HeaderCacheControl, "public, max-age=3600")
+		return c.Send(supportHTML)
 	})
 
 	return app

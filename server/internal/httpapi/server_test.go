@@ -176,6 +176,10 @@ func TestHealthAndPrivacy(t *testing.T) {
 	if res.StatusCode != 200 || !strings.Contains(body, "라익찍스 개인정보처리방침") {
 		t.Fatalf("privacy: %d", res.StatusCode)
 	}
+	res, body = do(t, app, httptest.NewRequest(http.MethodGet, "/support", nil))
+	if res.StatusCode != 200 || !strings.Contains(body, "라익찍스 고객지원") {
+		t.Fatalf("support: %d", res.StatusCode)
+	}
 }
 
 func scrape(t *testing.T, m *telemetry.Metrics) string {
