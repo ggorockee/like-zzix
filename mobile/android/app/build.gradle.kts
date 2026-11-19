@@ -19,6 +19,14 @@ val localProperties = Properties().apply {
 val admobAppId: String =
     localProperties.getProperty("admob.appId") ?: "ca-app-pub-3940256099942544~3347511713"
 
+// 릴리스 업로드 서명: 커밋하지 않는 android/key.properties (storeFile·storePassword·keyAlias·keyPassword)
+// 없으면 릴리스도 디버그 키로 서명한다 (로컬 `flutter run --release` 용, 스토어 업로드 불가)
+val keystoreProperties = Properties().apply {
+    val file = rootProject.file("key.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+val hasReleaseKey = keystoreProperties.getProperty("storeFile") != null
+
 android {
     namespace = "com.woohalabs.likezzix"
     compileSdk = flutter.compileSdkVersion
@@ -30,7 +38,6 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.woohalabs.likezzix"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
@@ -45,11 +52,20 @@ android {
         manifestPlaceholders["admobAppId"] = admobAppId
     }
 
+    signingConfigs {
+        if (hasReleaseKey) {
+            create("release") {
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName(if (hasReleaseKey) "release" else "debug")
         }
     }
 }
