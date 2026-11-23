@@ -1,0 +1,44 @@
+# 09. 로고·색상 체계
+
+> 기준일: 2026-11-23 · 색 정의는 `mobile/lib/core/app_theme.dart` 한 곳, 로고는 `mobile/lib/widgets/logo_mark.dart` 한 곳
+
+## 1. 색상 (핵심 1 + 서브 2)
+
+| 역할 | 이름 | 값 | 쓰는 곳 |
+|---|---|---|---|
+| 핵심 | 코랄 | #FF5A7A | 로고 바탕, 스플래시, 선택 상태(칩·줌·프리셋), 주요 버튼, 아직 안 맞은 관절 |
+| 서브 1 | 민트 | #2EE6A0 | 구도·각도가 맞았을 때만 (외곽선, 관절, "지금 찍으세요!") |
+| 서브 2 | 잉크 | #14121A | 배경, 시트, 카메라 위 반투명 판, 코랄·민트 위 글자 |
+
+- 글자와 선은 무채색 흰색을 쓴다. 나머지 값은 위 색의 투명도·밝기 단계다.
+- 코랄·민트 위 글자는 잉크 (대비 4.5:1 이상). 코랄 위 흰색은 큰 제목·로고에만 쓴다.
+- 다른 파일에서 색을 새로 만들면 `mobile/test/core/app_theme_test.dart`가 실패한다.
+- 예외: 레퍼런스 사진, AdMob 네이티브 광고 템플릿의 색
+
+## 2. 로고
+
+| 요소 | 의미 |
+|---|---|
+| 왼쪽 아래 "L" + 오른쪽 위 모서리 | Like의 L이자 촬영 프레임 |
+| 흰 몸 | 프레임 안 인물 |
+| 민트 머리 | 앱이 찍어 주는 "구도 일치" 점 |
+
+## 3. 다시 생성하는 순서 (mobile 폴더)
+
+| 순서 | 명령 | 결과 |
+|---|---|---|
+| 1 | `flutter test tool/generate_branding.dart` | 로고 PNG, 관리자 콘솔 파비콘 |
+| 2 | `dart run flutter_launcher_icons` | iOS·Android 앱 아이콘 |
+| 3 | `dart run flutter_native_splash:create` | 네이티브 스플래시 |
+| 4 | `test_driver/screenshot_driver.dart` 주석의 명령 | 스토어용 앱 화면 |
+| 5 | `uv run --with pillow python tool/store_assets.py` | 스토어 이미지 |
+
+2·3번은 로고와 무관한 `Info.plist`, `project.pbxproj`, `AndroidManifest.xml`도 바꾸므로 git diff로 확인하고 되돌린다.
+
+## 4. 작업 현황
+
+- [x] 로고, 앱 아이콘, 스플래시, 관리자 파비콘
+- [x] 앱 UI 3색 적용, 색 규칙 테스트
+- [x] 스토어 스크린샷·그래픽 재생성
+- [x] iOS 시뮬레이터, Galaxy Z Flip5 화면 확인
+- [ ] 새 빌드 업로드 후 스토어 이미지 교체

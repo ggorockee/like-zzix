@@ -7,19 +7,21 @@
 실행 (mobile 폴더에서): uv run --with pillow python tool/store_assets.py
 """
 
+import io
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFilter, ImageFont
+from PIL import Image, ImageCms, ImageDraw, ImageFilter, ImageFont
 
 ROOT = Path(__file__).resolve().parent.parent
 SHOTS = ROOT / "build" / "store_screenshots"
 OUT_IOS = ROOT / "store" / "ios"
 OUT_ANDROID = ROOT / "store" / "android"
 ICON = ROOT / "assets" / "branding" / "icon.png"
+MARK = ROOT / "assets" / "branding" / "splash_logo.png"
 
-# 앱 아이콘과 같은 그라데이션 (왼쪽 위 → 오른쪽 아래)
-GRAD_FROM = (255, 90, 122)
-GRAD_TO = (255, 153, 90)
+# 앱 색상 체계와 같은 색 (lib/core/app_theme.dart)
+CORAL = (255, 90, 122)
+INK = (20, 18, 26)
 
 FONT = "/System/Library/Fonts/AppleSDGothicNeo.ttc"
 FONT_BOLD = 6  # AppleSDGothicNeo.ttc 안의 Bold
@@ -27,7 +29,7 @@ FONT_MEDIUM = 2  # Medium
 
 # (스크린샷, 제목, 부제)
 SLIDES = [
-    ("01_perfect_match", "누가 찍어도\n원하는 구도 그대로", "실루엣에 맞으면 \"지금 찍으세요!\""),
+    ("01_perfect_match", "누가 찍어도\n원하는 구도 그대로", '실루엣에 맞으면 "지금 찍으세요!"'),
     ("02_presets", "찍고 싶은 구도를\n골라만 주세요", "전신샷·카페 컷 레퍼런스 프리셋"),
     ("03_angle_guide", "폰 각도까지\n하나하나 알려줘요", "위·아래로 몇 도 기울일지 실시간 안내"),
 ]
@@ -35,16 +37,6 @@ SLIDES = [
 
 def font(size: int, bold: bool = True) -> ImageFont.FreeTypeFont:
     return ImageFont.truetype(FONT, size, index=FONT_BOLD if bold else FONT_MEDIUM)
-
-
-def gradient(width: int, height: int) -> Image.Image:
-    """대각선 그라데이션 (작게 그린 뒤 확대해 계단 현상 없이 빠르게)."""
-    small = Image.new("RGB", (64, 64))
-    for y in range(64):
-        for x in range(64):
-            t = (x + y) / 126
-            small.putpixel((x, y), tuple(round(a + (b - a) * t) for a, b in zip(GRAD_FROM, GRAD_TO)))
-    return small.resize((width, height), Image.BICUBIC)
 
 
 def rounded(img: Image.Image, radius: int) -> Image.Image:
@@ -55,9 +47,19 @@ def rounded(img: Image.Image, radius: int) -> Image.Image:
     return out
 
 
+def open_srgb(path: Path) -> Image.Image:
+    """시뮬레이터 캡처는 Display P3라서 sRGB로 변환해야 앱 색과 같게 보인다."""
+    img = Image.open(path).convert("RGB")
+    icc = img.info.get("icc_profile")
+    if not icc:
+        return img
+    source = ImageCms.ImageCmsProfile(io.BytesIO(icc))
+    return ImageCms.profileToProfile(img, source, ImageCms.createProfile("sRGB"))
+
+
 def slide(shot: Path, title: str, subtitle: str, width: int, height: int) -> Image.Image:
     """위쪽에 문구, 아래쪽에 앱 화면(둥근 모서리 + 그림자)을 배치. 화면 아래는 잘려도 된다."""
-    canvas = gradient(width, height).convert("RGBA")
+    canvas = Image.new("RGBA", (width, height), CORAL)
     draw = ImageDraw.Draw(canvas)
     s = width / 1320  # 기준 폭 1320 대비 배율
 
@@ -68,10 +70,10 @@ def slide(shot: Path, title: str, subtitle: str, width: int, height: int) -> Ima
         (width / 2, y), title, font=title_font, fill="white", anchor="ma", align="center", spacing=round(26 * s)
     )
     title_h = draw.multiline_textbbox((width / 2, y), title, font=title_font, anchor="ma", spacing=round(26 * s))[3]
-    draw.text((width / 2, title_h + round(44 * s)), subtitle, font=sub_font, fill=(255, 255, 255, 230), anchor="ma")
+    draw.text((width / 2, title_h + round(44 * s)), subtitle, font=sub_font, fill=INK, anchor="ma")
 
     phone_w = round(width * 0.80)
-    screen = Image.open(shot).convert("RGB")
+    screen = open_srgb(shot)
     screen = screen.resize((phone_w, round(screen.height * phone_w / screen.width)), Image.LANCZOS)
     screen = rounded(screen, round(70 * s))
     top = title_h + round(170 * s)
@@ -79,7 +81,7 @@ def slide(shot: Path, title: str, subtitle: str, width: int, height: int) -> Ima
 
     shadow = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
     ImageDraw.Draw(shadow).rounded_rectangle(
-        (left, top + round(20 * s), left + phone_w, top + screen.height), round(70 * s), fill=(120, 20, 40, 110)
+        (left, top + round(20 * s), left + phone_w, top + screen.height), round(70 * s), fill=(*INK, 110)
     )
     canvas = Image.alpha_composite(canvas, shadow.filter(ImageFilter.GaussianBlur(round(40 * s))))
     # 흰 테두리로 기기 느낌
@@ -93,17 +95,14 @@ def slide(shot: Path, title: str, subtitle: str, width: int, height: int) -> Ima
 
 def feature_graphic() -> Image.Image:
     """Play 그래픽 이미지 1024x500: 아이콘 + 앱 이름 + 한 줄 소개."""
-    canvas = gradient(1024, 500).convert("RGBA")
-    icon = Image.open(ICON).convert("RGBA").resize((260, 260), Image.LANCZOS)
-    icon = rounded(icon, 58)
-    ring = Image.new("RGBA", (276, 276), (0, 0, 0, 0))
-    ImageDraw.Draw(ring).rounded_rectangle((0, 0, 276, 276), 66, fill=(255, 255, 255, 235))
-    canvas.alpha_composite(ring, (82, 112))
-    canvas.alpha_composite(icon, (90, 120))
+    canvas = Image.new("RGBA", (1024, 500), CORAL)
+    # 배경이 아이콘과 같은 코랄이므로 투명 배경 마크만 올린다
+    mark = Image.open(MARK).convert("RGBA").resize((430, 430), Image.LANCZOS)
+    canvas.alpha_composite(mark, (10, 35))
     draw = ImageDraw.Draw(canvas)
     draw.text((420, 150), "라익찍스", font=font(104), fill="white")
-    draw.text((424, 285), "딱 이대로 찍어주는", font=font(44, bold=False), fill=(255, 255, 255, 235))
-    draw.text((424, 342), "완벽 구도 카메라", font=font(44, bold=False), fill=(255, 255, 255, 235))
+    draw.text((424, 285), "딱 이대로 찍어주는", font=font(44, bold=False), fill=INK)
+    draw.text((424, 342), "완벽 구도 카메라", font=font(44, bold=False), fill=INK)
     return canvas.convert("RGB")
 
 

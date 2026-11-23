@@ -1,10 +1,13 @@
 # 네이티브 스플래시 생성: dart run flutter_native_splash:create
+# 실행 후 git diff로 Info.plist·AndroidManifest·project.pbxproj의 로고와 무관한 변경은 되돌릴 것
 # 첫 프레임 이후에는 Flutter 스플래시(SplashScreen)가 같은 배경·로고로 이어받아 로고를 통통 튀게 한다.
 flutter_native_splash:
-  color: "#FF6E72"
+  color: "#FF5A7A"
   image: assets/branding/splash_logo.png
   android_12:
-    color: "#FF6E72"
+    color: "#FF5A7A"
     image: assets/branding/splash_logo_android12.png
-    icon_background_color: "#FF6E72"
+    icon_background_color: "#FF5A7A"
+  # 지정하지 않으면 생성할 때 AndroidManifest의 세로 고정이 지워진다
+  android_screen_orientation: portrait
   fullscreen: false

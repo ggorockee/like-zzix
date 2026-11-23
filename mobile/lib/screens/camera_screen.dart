@@ -390,7 +390,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     ref.listen(selectedPresetProvider, (_, _) => unawaited(_syncPoseStream()));
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: AppTheme.ink,
       body: Stack(
         children: [
           Positioned.fill(
@@ -432,7 +432,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
               child: AnimatedOpacity(
                 duration: const Duration(milliseconds: 120),
                 opacity: _flash ? 0.7 : 0,
-                child: const ColoredBox(color: Colors.white),
+                child: const ColoredBox(color: AppTheme.white),
               ),
             ),
           ),
@@ -652,10 +652,10 @@ class _PresetThumbButton extends StatelessWidget {
           height: 56,
           padding: const EdgeInsets.all(3),
           decoration: BoxDecoration(
-            color: Colors.black45,
+            color: AppTheme.scrim,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: preset != null ? AppTheme.brand : Colors.white70,
+              color: preset != null ? AppTheme.coral : AppTheme.whiteMuted,
               width: 2,
             ),
           ),
@@ -688,9 +688,9 @@ class _RoundIconButton extends StatelessWidget {
       tooltip: tooltip,
       iconSize: 26,
       style: IconButton.styleFrom(
-        backgroundColor: Colors.black45,
-        foregroundColor: Colors.white,
-        disabledBackgroundColor: Colors.black26,
+        backgroundColor: AppTheme.scrim,
+        foregroundColor: AppTheme.white,
+        disabledBackgroundColor: AppTheme.scrimSoft,
         fixedSize: const Size(56, 56),
       ),
       icon: Icon(icon),
@@ -721,7 +721,7 @@ class _CameraFallback extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xFF1C1C1E), Colors.black],
+          colors: [AppTheme.inkRaised, AppTheme.ink],
         ),
       ),
       child: Center(

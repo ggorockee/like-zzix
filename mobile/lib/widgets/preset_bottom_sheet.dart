@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
+import '../core/app_theme.dart';
 import '../models/preset.dart';
 import '../providers/ad_providers.dart';
 import '../providers/preset_providers.dart';
@@ -14,7 +15,7 @@ Future<void> showPresetBottomSheet(BuildContext context) {
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    backgroundColor: const Color(0xFF1C1C1E),
+    backgroundColor: AppTheme.ink,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
@@ -157,7 +158,7 @@ class _Handle extends StatelessWidget {
     width: 40,
     height: 4,
     decoration: BoxDecoration(
-      color: Colors.white30,
+      color: AppTheme.whiteFaint,
       borderRadius: BorderRadius.circular(2),
     ),
   );

@@ -24,16 +24,13 @@ void main() {
 
   test('브랜딩 이미지 생성', () async {
     const dir = 'assets/branding';
-    // iOS/기본 아이콘: 꽉 찬 그라데이션 (모서리는 OS가 둥글게 자름)
+    // iOS/기본 아이콘: 꽉 찬 코랄 (모서리는 OS가 둥글게 자름)
     await _render('$dir/icon.png', 1024, const LogoMarkPainter());
-    // Android 적응형 아이콘: 배경 그라데이션 + 투명 전경(안전 영역 안으로 축소)
+    // Android 적응형 아이콘: 배경 코랄 + 투명 전경(안전 영역 안으로 축소)
     await _render(
       '$dir/icon_background.png',
       1024,
-      const LogoMarkPainter(
-        markColor: Colors.transparent,
-        sparkleColor: Colors.transparent,
-      ),
+      const LogoMarkPainter(paintMark: false),
     );
     await _render(
       '$dir/icon_foreground.png',
@@ -43,7 +40,7 @@ void main() {
         contentScale: 0.78,
       ),
     );
-    // 스플래시: 브랜드 단색 배경 위 흰 마크 (투명 배경)
+    // 스플래시: 코랄 배경 위 마크 (투명 배경)
     await _render(
       '$dir/splash_logo.png',
       768,
@@ -62,7 +59,13 @@ void main() {
     await _render(
       '$dir/logo_preview.png',
       512,
-      const LogoMarkPainter(background: LogoBackground.roundedGradient),
+      const LogoMarkPainter(background: LogoBackground.rounded),
+    );
+    // 관리자 콘솔 파비콘
+    await _render(
+      '../admin/public/favicon.png',
+      512,
+      const LogoMarkPainter(background: LogoBackground.rounded),
     );
   });
 }

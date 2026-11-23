@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/app_theme.dart';
 import '../providers/ad_providers.dart';
 import '../providers/api_providers.dart';
 import '../providers/preset_providers.dart';
@@ -84,7 +85,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: LogoMarkPainter.splashColor,
+      backgroundColor: AppTheme.coral,
       body: Stack(
         children: [
           Center(child: BouncingLogo(animation: _bounce)),
@@ -106,7 +107,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                   Text(
                     '라익찍스',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: AppTheme.white,
                       fontSize: 30,
                       fontWeight: FontWeight.w800,
                       letterSpacing: 1,
@@ -115,7 +116,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                   SizedBox(height: 6),
                   Text(
                     '딱 이대로 찍어주는 완벽 구도 카메라',
-                    style: TextStyle(color: Colors.white70, fontSize: 14),
+                    // 코랄 위 작은 글자는 흰색 대비가 부족해 ink 사용
+                    style: TextStyle(color: AppTheme.ink, fontSize: 14),
                   ),
                 ],
               ),
@@ -172,7 +174,7 @@ class BouncingLogo extends StatelessWidget {
                   width: size * 0.55 * (1 - 0.45 * h),
                   height: 12,
                   decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.18 * (1 - 0.6 * h)),
+                    color: AppTheme.ink.withValues(alpha: 0.2 * (1 - 0.6 * h)),
                     borderRadius: const BorderRadius.all(
                       Radius.elliptical(100, 12),
                     ),

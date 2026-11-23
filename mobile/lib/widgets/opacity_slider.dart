@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/app_theme.dart';
 import '../providers/preset_providers.dart';
 
 /// 실루엣 투명도 조절 (상단 반투명 캡슐).
@@ -19,7 +20,7 @@ class OpacitySlider extends StatelessWidget {
       height: 40,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: Colors.black38,
+        color: AppTheme.scrimSoft,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
@@ -30,9 +31,9 @@ class OpacitySlider extends StatelessWidget {
               data: SliderTheme.of(context).copyWith(
                 trackHeight: 2,
                 thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
-                activeTrackColor: Colors.white,
-                inactiveTrackColor: Colors.white24,
-                thumbColor: Colors.white,
+                activeTrackColor: AppTheme.white,
+                inactiveTrackColor: AppTheme.whiteFaint,
+                thumbColor: AppTheme.white,
                 overlayShape: SliderComponentShape.noOverlay,
               ),
               child: Slider(

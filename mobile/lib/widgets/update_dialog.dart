@@ -98,7 +98,7 @@ class _UpdateDialog extends StatelessWidget {
         ? '더 안정적인 촬영을 위해 최신 버전으로 업데이트가 필요해요.'
         : '새 버전(${policy.latestVersion})이 나왔어요. 지금 업데이트할까요?';
     return AlertDialog(
-      icon: const Icon(Icons.system_update, color: AppTheme.brand, size: 36),
+      icon: const Icon(Icons.system_update, color: AppTheme.coral, size: 36),
       title: Text(forced ? '업데이트가 필요해요' : '새 버전이 있어요'),
       content: Text(message, textAlign: TextAlign.center),
       actionsAlignment: MainAxisAlignment.center,
@@ -106,7 +106,7 @@ class _UpdateDialog extends StatelessWidget {
         if (!forced) TextButton(onPressed: onLater, child: const Text('나중에')),
         if (policy.storeUrl.isNotEmpty)
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: AppTheme.brand),
+            style: FilledButton.styleFrom(backgroundColor: AppTheme.coral),
             onPressed: onUpdate,
             child: const Text('업데이트'),
           ),
