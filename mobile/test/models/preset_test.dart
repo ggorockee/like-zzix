@@ -48,7 +48,7 @@ void main() {
     final presets = PresetRepository.parse(raw);
     expect(presets.map((p) => p.id), ['ok']);
     expect(presets.single.aspectRatio, closeTo(0.8, 1e-9));
-    expect(presets.single.category, PresetCategory.side);
+    expect(presets.single.category, PresetCategory.pose);
     expect(presets.single.hasOutline, isFalse);
     expect(presets.single.guide, isEmpty);
   });

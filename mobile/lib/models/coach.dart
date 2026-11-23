@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'angle_state.dart';
-import 'subject.dart';
+import 'composition_fit.dart';
 
 enum CoachTone { neutral, warning, perfect }
 
@@ -14,10 +14,10 @@ class CoachMessage {
   final String text;
   final CoachTone tone;
 
-  /// 우선순위: 완성 → 폰 세우기 → 사람 찾기·잘림 → 거리 → 각도 → 좌우·높이.
+  /// 우선순위: 완성 → 폰 세우기 → 사람 찾기·잘림 → 거리 → 폰 각도 → 위치 → 시선.
   static CoachMessage? of({
     required AngleGuide? angle,
-    required SubjectFit? fit,
+    required CompositionFit? fit,
     required bool ready,
   }) {
     if (ready) {
@@ -44,6 +44,7 @@ class CoachMessage {
         ? '조금만 $direction 가세요'
         : '$direction ${const ['', '한', '두', '세', '네', '다섯'][fit.steps]} 걸음';
 
+    final who = '${fit.who ?? '한 분'},';
     switch (fit.action) {
       case CoachAction.findPerson:
         return const CoachMessage(
@@ -51,6 +52,8 @@ class CoachMessage {
           '사람을 화면에 담아 주세요',
           CoachTone.neutral,
         );
+      case CoachAction.findSecond:
+        return warn(Icons.group, '두 사람이 모두 보이게 해 주세요');
       case CoachAction.showHead:
         return warn(Icons.vertical_align_top, '머리가 잘려요, 폰을 살짝 들어 주세요');
       case CoachAction.showFeet:
@@ -59,6 +62,10 @@ class CoachMessage {
         return warn(Icons.open_in_full, walk('뒤로'));
       case CoachAction.stepCloser:
         return warn(Icons.close_fullscreen, walk('앞으로'));
+      case CoachAction.personCloser:
+        return warn(Icons.person, '$who 앞으로 조금');
+      case CoachAction.personBack:
+        return warn(Icons.person, '$who 뒤로 조금');
       default:
         break;
     }
@@ -68,6 +75,12 @@ class CoachMessage {
           CoachAction.panRight => warn(Icons.arrow_forward, '폰을 오른쪽으로 살짝'),
           CoachAction.raisePhone => warn(Icons.north, '폰 높이를 조금 올려 주세요'),
           CoachAction.lowerPhone => warn(Icons.south, '폰 높이를 조금 낮춰 주세요'),
+          CoachAction.personLeft => warn(Icons.arrow_back, '$who 왼쪽으로 조금'),
+          CoachAction.personRight => warn(Icons.arrow_forward, '$who 오른쪽으로 조금'),
+          CoachAction.personUp => warn(Icons.north, '$who 조금 더 높게'),
+          CoachAction.personDown => warn(Icons.south, '$who 조금 더 낮게'),
+          CoachAction.lookLeft => warn(Icons.west, '얼굴을 화살표(왼쪽) 쪽으로'),
+          CoachAction.lookRight => warn(Icons.east, '얼굴을 화살표(오른쪽) 쪽으로'),
           _ => const CoachMessage(
             Icons.check_circle,
             '좋아요, 그대로!',

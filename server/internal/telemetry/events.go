@@ -28,14 +28,22 @@ var PresetEvents = map[string]bool{
 	"guide_locked":    true,
 }
 
-// TemplateIDs are the silhouette templates bundled in the app
-// (mobile/assets/templates/templates.json). They are not in the catalog, so
+// TemplateIDs are the composition templates bundled in the app
+// (mobile/assets/templates/compositions.json). They are not in the catalog, so
 // they are allowlisted here to be counted per preset like catalog presets.
 var TemplateIDs = map[string]bool{
-	"tpl-full-body": true,
-	"tpl-cafe":      true,
-	"tpl-landscape": true,
-	"tpl-sitting":   true,
+	"cmp-center":         true,
+	"cmp-thirds":         true,
+	"cmp-full-body":      true,
+	"cmp-cafe":           true,
+	"cmp-negative-space": true,
+	"cmp-frame":          true,
+	"cmp-vanishing":      true,
+	"cmp-landscape":      true,
+	"cmp-gaze-room":      true,
+	"cmp-sitting":        true,
+	"cmp-two-height":     true,
+	"cmp-two-depth":      true,
 }
 
 const (

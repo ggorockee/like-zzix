@@ -10,7 +10,7 @@ final presetRepositoryProvider = Provider<PresetRepository>(
   (ref) => PresetRepository(),
 );
 
-/// 실루엣 템플릿 + 사진 프리셋.
+/// 벡터 구도 + 사진 프리셋.
 /// 사진은 서버 목록을 우선 사용하고, 실패하거나 비어 있으면 앱 번들로 대체.
 final presetsProvider = FutureProvider<List<Preset>>((ref) async {
   final repository = ref.watch(presetRepositoryProvider);
@@ -30,7 +30,7 @@ final presetsProvider = FutureProvider<List<Preset>>((ref) async {
   return [...templates, ...await repository.loadBundled()];
 });
 
-/// 시트에서 고른 프리셋 (반전 전 원본). null이면 실루엣 오버레이 없음.
+/// 시트에서 고른 프리셋 (반전 전 원본). null이면 가이드 없음.
 final selectedPresetProvider =
     NotifierProvider<SelectedPresetNotifier, Preset?>(
       SelectedPresetNotifier.new,
@@ -74,7 +74,7 @@ final activePresetProvider = Provider<Preset?>((ref) {
   return ref.watch(guideMirrorProvider) ? preset?.flipped : preset;
 });
 
-/// 가이드 투명도 (0.1~1.0). 기본값은 사진 40%, 실루엣 선 90%.
+/// 가이드 투명도 (0.1~1.0). 기본값은 사진 40%, 구도선 90%.
 final overlayOpacityProvider = NotifierProvider<OverlayOpacityNotifier, double>(
   OverlayOpacityNotifier.new,
 );

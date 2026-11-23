@@ -5,43 +5,39 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:likezzix/models/angle_state.dart';
+import 'package:likezzix/models/composition_fit.dart';
 import 'package:likezzix/models/subject.dart';
 import 'package:likezzix/providers/attitude_providers.dart';
 import 'package:likezzix/providers/camera_providers.dart';
+import 'package:likezzix/providers/composition_providers.dart';
 import 'package:likezzix/providers/preset_providers.dart';
 import 'package:likezzix/providers/shooting_providers.dart';
-import 'package:likezzix/providers/subject_providers.dart';
 import 'package:likezzix/services/preset_repository.dart';
 
-/// 센서 없이 각도 상태를 고정·변경
 class _FakeAngle extends AngleGuideNotifier {
-  _FakeAngle(this.initial);
+  _FakeAngle(this.angle);
 
-  final AngleState initial;
-
-  static AngleGuide guide(AngleState s) =>
-      AngleGuide(state: s, pitchDelta: 0, rollDelta: 0, pitchError: 5);
+  final AngleState angle;
 
   @override
-  AngleGuide? build() => guide(initial);
-
-  void set(AngleState s) => state = guide(s);
+  AngleGuide? build() =>
+      AngleGuide(state: angle, pitchDelta: 0, rollDelta: 0, pitchError: 5);
 }
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   const finder = Size(360, 480);
-  final preset = PresetRepository.parseTemplates(
+  final presets = PresetRepository.parseTemplates(
     File(PresetRepository.templatesAsset).readAsStringSync(),
-  ).first;
-  final target = SubjectTarget.of(preset, finder)!;
+  );
+  final preset = presets.firstWhere((p) => p.id == 'cmp-thirds');
+  final targets = Target.of(preset, finder);
+  final radius = (targets.single as FaceTarget).radius;
   late DateTime now;
   final haptics = <Object?>[];
 
-  Subject person([double dx = 0]) => Subject({
-    for (final e in target.subject.points.entries)
-      e.key: e.value + Offset(dx, 0),
-  }, halfWidth: 40);
+  LivePerson person([Offset shift = Offset.zero]) =>
+      LivePerson.face(targets.single.box.shift(shift));
 
   setUp(() {
     haptics.clear();
@@ -59,7 +55,7 @@ void main() {
     final c = ProviderContainer(
       overrides: [
         angleGuideProvider.overrideWith(() => _FakeAngle(angle)),
-        subjectClockProvider.overrideWithValue(() => now),
+        visionClockProvider.overrideWithValue(() => now),
       ],
     );
     addTearDown(c.dispose);
@@ -73,13 +69,12 @@ void main() {
 
   Future<void> frames(
     ProviderContainer c,
-    Subject? s, {
+    List<LivePerson> people, {
     int count = 8,
-    int ms = 80,
   }) async {
     for (var i = 0; i < count; i++) {
-      now = now.add(Duration(milliseconds: ms));
-      c.read(subjectProvider.notifier).update(s, target, focal: 480);
+      now = now.add(const Duration(milliseconds: 80));
+      c.read(compositionProvider.notifier).update(people, targets, focal: 480);
       await c.pump();
     }
   }
@@ -88,79 +83,81 @@ void main() {
 
   test('각도가 맞아도 사람이 없으면 초록불이 켜지지 않는다', () async {
     final c = await container(AngleState.good);
-    await frames(c, null);
+    await frames(c, const []);
     expect(signal(c), ShootSignal.waiting);
     expect(haptics, isEmpty);
   });
 
   test('사람이 맞아도 각도가 벗어나면 초록불이 아니다', () async {
     final c = await container(AngleState.off);
-    await frames(c, person());
+    await frames(c, [person()]);
     expect(signal(c), ShootSignal.angleOff);
   });
 
   test('사람과 각도가 모두 맞고 유지되면 초록불 + 가벼운 진동 1회', () async {
     final c = await container(AngleState.good);
-    await frames(c, person(), count: 2);
-    expect(signal(c), ShootSignal.adjusting); // 아직 유지 시간 전
-    await frames(c, person());
+    await frames(c, [person()], count: 2);
+    expect(signal(c), ShootSignal.adjusting);
+    await frames(c, [person()]);
     expect(signal(c), ShootSignal.ready);
-    await frames(c, person(), count: 20);
+    await frames(c, [person()], count: 20);
     expect(haptics, ['HapticFeedbackType.lightImpact']);
   });
 
-  test('사람 경계에서 흔들려도 초록불이 깜빡이지 않는다', () async {
+  test('경계에서 흔들려도 초록불이 깜빡이지 않는다 (진입 엄격 / 이탈 여유)', () async {
     final c = await container(AngleState.good);
-    await frames(c, person());
+    await frames(c, [person()]);
     var changes = 0;
     c.listen(shootSignalProvider, (_, _) => changes++);
-    // 허용 오차(약 19px) 경계를 오가는 흔들림
     for (var i = 0; i < 30; i++) {
-      await frames(c, person(i.isEven ? 23 : 16), count: 1);
+      await frames(c, [
+        person(Offset(radius * (i.isEven ? 1.25 : 0.85), 0)),
+      ], count: 1);
     }
     expect(signal(c), ShootSignal.ready);
     expect(changes, 0);
+    // 여유를 넘으면 해제
+    await frames(c, [person(Offset(radius * 1.8, 0))], count: 15);
+    expect(signal(c), ShootSignal.adjusting);
   });
 
   test('인식이 잠깐 끊기는 것은 무시하고, 오래 끊기면 사람 없음', () async {
     final c = await container(AngleState.good);
-    await frames(c, person());
-    await frames(c, null, count: 4); // 0.32초
+    await frames(c, [person()]);
+    await frames(c, const [], count: 4);
     expect(signal(c), ShootSignal.ready);
-    await frames(c, null, count: 6);
+    await frames(c, const [], count: 6);
     expect(signal(c), ShootSignal.waiting);
   });
 
-  test('전면 카메라는 좌우 안내가 반대', () async {
+  test('전면 카메라는 폰을 돌릴 방향이 반대', () async {
     final c = await container(AngleState.good);
-    await frames(c, person(90));
-    expect(c.read(subjectProvider)!.fit.action, CoachAction.panRight);
+    await frames(c, [person(const Offset(70, 0))]);
+    expect(c.read(compositionProvider)!.fit.action, CoachAction.panRight);
     c.read(activeLensProvider.notifier).set(CameraLensDirection.front);
-    await frames(c, person(90));
-    expect(c.read(subjectProvider)!.fit.action, CoachAction.panLeft);
+    await frames(c, [person(const Offset(70, 0))]);
+    expect(c.read(compositionProvider)!.fit.action, CoachAction.panLeft);
   });
 
-  test('고스트: 고른 직후와 사람이 없을 때만 보인다', () async {
+  test('고스트·안내 패널: 고른 직후와 사람이 없을 때만', () async {
     final c = await container(AngleState.good);
     c.listen(ghostVisibleProvider, (_, _) {});
-    expect(c.read(ghostVisibleProvider), isTrue); // 고른 직후
-    await frames(c, person());
-    expect(c.read(ghostVisibleProvider), isTrue); // 2초 동안은 유지
+    expect(c.read(ghostVisibleProvider), isTrue);
     await Future<void>.delayed(
       GhostFlashNotifier.duration + const Duration(milliseconds: 50),
     );
-    await c.pump();
+    await frames(c, [person()]);
     expect(c.read(ghostVisibleProvider), isFalse);
-    await frames(c, null, count: 10);
-    expect(c.read(ghostVisibleProvider), isTrue); // 사람이 사라짐
+    await frames(c, const [], count: 10);
+    expect(c.read(ghostVisibleProvider), isTrue);
   });
 
-  test('프리셋을 해제하면 신호 없음', () async {
+  test('구도를 해제하면 신호 없음', () async {
     final c = await container(AngleState.good);
-    await frames(c, person());
+    await frames(c, [person()]);
     c.read(selectedPresetProvider.notifier).clear();
     await c.pump();
     expect(signal(c), isNull);
-    expect(c.read(subjectProvider), isNull);
+    expect(c.read(compositionProvider), isNull);
   });
 }

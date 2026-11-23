@@ -3,25 +3,23 @@ import 'dart:ui' show Offset;
 import 'package:flutter/foundation.dart';
 
 import 'angle_spec.dart';
-import 'silhouette_template.dart';
+import 'composition.dart';
 
-/// 프리셋 카테고리. `id`는 서버/번들 JSON의 `category` 값.
+/// 구도 목록의 탭. 서버 사진 프리셋의 옛 카테고리 id도 여기로 묶는다.
 enum PresetCategory {
-  fullBody('full_body', '전신샷'),
-  lookBack('look_back', '부르고 찍기'),
-  side('side', '옆모습'),
-  cafe('cafe', '음료·카페'),
-  landscape('landscape', '풍경'),
-  sitting('sitting', '앉은 포즈');
+  basic('기본/인물', ['basic', 'full_body', 'cafe']),
+  travel('배경/여행', ['travel']),
+  pose('포즈/느낌', ['pose', 'look_back', 'side']),
+  special('특수/2인', ['special']);
 
-  const PresetCategory(this.id, this.label);
+  const PresetCategory(this.label, this.ids);
 
-  final String id;
   final String label;
+  final List<String> ids;
 
   static PresetCategory? tryParse(String? id) {
     for (final c in values) {
-      if (c.id == id) return c;
+      if (c.ids.contains(id)) return c;
     }
     return null;
   }
@@ -72,10 +70,10 @@ abstract final class PoseIndex {
 }
 
 /// 구도 프리셋. 두 종류가 있다.
-/// - 실루엣 템플릿([template] 있음): 상황별 기본 구도
+/// - 벡터 구도([template] 있음): 선·앵커로 된 기본 구도
 /// - 사진 프리셋: 레퍼런스 사진 (`01_MOBILE.md` 5장 스키마)
 ///
-/// 둘 다 목표 인물 자리([SubjectTarget])와 권장 각도([angle])만 뽑아 실시간 인물과 비교한다.
+/// 둘 다 인물 자리(`Target`)와 권장 각도([angle])만 뽑아 실시간 인물과 비교한다.
 @immutable
 class Preset {
   const Preset({
@@ -108,7 +106,7 @@ class Preset {
       id: json['id'] as String,
       category:
           PresetCategory.tryParse(json['category'] as String?) ??
-          PresetCategory.fullBody,
+          PresetCategory.basic,
       title: json['title'] as String,
       tip: json['tip'] as String? ?? '',
       aspectRatio: _parseAspectRatio(json['aspect_ratio'] as String?),
@@ -134,13 +132,13 @@ class Preset {
     );
   }
 
-  /// 실루엣 템플릿 (`assets/templates/templates.json`)
+  /// 벡터 구도 (`assets/templates/compositions.json`)
   factory Preset.fromTemplateJson(Map<String, dynamic> json, int order) =>
       Preset(
         id: json['id'] as String,
         category:
             PresetCategory.tryParse(json['category'] as String?) ??
-            PresetCategory.fullBody,
+            PresetCategory.basic,
         title: json['title'] as String,
         tip: json['tip'] as String? ?? '',
         aspectRatio: 3 / 4,
@@ -150,7 +148,7 @@ class Preset {
           for (final step in json['guide'] as List<dynamic>? ?? const [])
             step as String,
         ],
-        template: SilhouetteTemplate.fromJson(json),
+        template: CompositionTemplate.fromJson(json),
       );
 
   final String id;
@@ -164,11 +162,11 @@ class Preset {
   /// 권장 촬영 각도
   final AngleSpec angle;
 
-  /// 레퍼런스 관절. 실루엣 템플릿은 비어 있음.
+  /// 레퍼런스 관절. 벡터 구도는 비어 있음.
   final List<PoseLandmark> landmarks;
 
-  /// 선 실루엣 (사진 프리셋은 null)
-  final SilhouetteTemplate? template;
+  /// 벡터 구도 (사진 프리셋은 null)
+  final CompositionTemplate? template;
 
   /// 좌우 반전된 상태인지
   final bool mirrored;

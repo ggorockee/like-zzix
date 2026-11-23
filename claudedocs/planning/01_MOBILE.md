@@ -112,31 +112,47 @@ PRD 지정 4개 폴더(`screens`, `services`, `widgets`, `models`)를 유지하�
 - 프리뷰: `ResolutionPreset.high`, 화면 비율에 맞춰 `FittedBox(fit: cover)`로 꽉 채움. 화면에 잘려 보이는 영역과 실제 캡처 영역의 차이를 `PreviewTransform`(scale, offset, 회전, 전면 카메라 미러링)으로 한 곳에서 계산해 오버레이·매칭·크롭이 모두 같은 좌표 변환을 사용.
 - 앱 라이프사이클: `inactive`에서 컨트롤러 dispose, `resumed`에서 재생성.
 
-### 6.3 동적 가이드 (2026-11-23 개편)
+### 6.3 벡터 구도 가이드 (2026-11-23 개편)
 
-정적 실루엣·관절 정밀 비교 대신, 실시간 인물이 **목표 자리(크기·위치)** 에 들어오는지와 **폰 각도**를 함께 본다.
+마네킹 실루엣 대신 구도선(선·상자·화살표·격자)과 인물 자리(점·상자)를 보여 주고, 실시간 인물과 폰 각도를 함께 판정한다.
 
 | 단계 | 내용 | 코드 |
 |---|---|---|
-| 목표 | 템플릿 4종(`assets/templates/templates.json`) 또는 사진 프리셋에서 머리·어깨·엉덩이·발끝 자리와 권장 각도만 추출 | `models/subject.dart` `SubjectTarget`, `models/angle_spec.dart` |
-| 인식 | ML Kit 포즈(사람이 있으면 약 12fps, 없으면 약 5fps). 정수리는 코~어깨 거리로 추정, 화면 밖 발은 없는 것으로 처리 | `services/pose_service.dart`, `Subject.fromLandmarks` |
-| 판정 | 크기 10%, 머리·발끝 6%, 좌우 5% 이내면 90점. 90점 진입·86점 이탈, 0.25초 유지 | `SubjectFit`, `providers/subject_providers.dart` |
-| 코칭 | 사람 찾기 → 잘림 → 거리(걸음 수) → 폰 각도 → 좌우·높이 순으로 한 문장. 0.45초 최소 유지 | `models/coach.dart` |
-| 화면 | 사람 프레임이 55점부터 목표에 붙기 시작(자석), 기준점별 초록 반응, 거리 화살표. 완성되면 모두 사라지고 초록 테두리만 | `widgets/dynamic_frame.dart` |
-| 고스트 | 고른 직후 2초와 사람이 없을 때만 반투명 실루엣·사진. 폰 각도만큼 움직임 | `widgets/reference_overlay.dart`, `models/guide_motion.dart` |
+| 템플릿 | 정규화 좌표(0~1) JSON 12종, 탭 4개 | `assets/templates/compositions.json`, `models/composition.dart` |
+| 선택 | [도식 / 예시] 카드. 예시 사진이 없으면 데이터로 그린 일러스트 | `widgets/composition_card.dart`, `preset_bottom_sheet.dart` |
+| 인식 | 얼굴 구도는 얼굴 인식(여러 명·고개 방향), 전신 구도는 포즈 인식. 필요한 것만, 사람이 없으면 약 5fps | `services/vision_service.dart` |
+| 판정 | 자리마다 사람 배정 → 위치·크기·시선 오차 ÷ 허용 오차. 모두 1 이하면 90점. 90점 진입·86점 이탈, 0.25초 유지 | `models/composition_fit.dart`, `providers/composition_providers.dart` |
+| 코칭 | 사람 찾기 → 잘림 → 거리(걸음 수) → 폰 각도 → 위치 → 시선 순으로 한 문장. 여러 명이면 "왼쪽 분, 조금 더 높게" | `models/coach.dart` |
+| 화면 | 조건별 초록 반응, 자석 스냅(55~90점), 완성 시 전체 초록 + 진동 1회 → 0.3초 뒤 10%로 투명 + 얇은 테두리 | `widgets/composition_painter.dart`, `dynamic_frame.dart` |
 
-촬영 신호(`ShootSignal`): 대기(흰색) / 사람 맞추는 중·각도 이탈(노랑) / 촬영(초록). 초록은 사람과 각도가 모두 맞을 때만. 노랑 → 초록에서 가벼운 진동 1회.
+촬영 신호(`ShootSignal`): 대기(흰색) / 맞추는 중·각도 이탈(노랑) / 촬영(초록). 초록은 사람과 각도가 모두 맞을 때만.
 
-### 6.4 템플릿과 권장 각도 (위를 볼 때 +)
+### 6.4 템플릿 JSON 스키마
 
-| 템플릿 | 상하 각도 | 수평 | 크기를 재는 기준 |
+| 필드 | 설명 |
+|---|---|
+| `category` | basic(기본/인물), travel(배경/여행), pose(포즈/느낌), special(특수/2인) |
+| `angle` | `elevation_min`·`elevation_max`(위를 볼 때 +), `roll_tolerance` |
+| `elements[]` | `type` line·rect·arrow·grid, `points` 또는 `rect`[왼쪽, 위, 폭, 높이], `style` dashed, `weight`, `label`, `role` gaze |
+| `subjects[]` (얼굴) | `detect` face, `anchor`[x, y], `radius`, `size`[최소, 최대] (모두 뷰파인더 높이 대비), `gaze` left·right, `label` |
+| `subjects[]` (전신) | `detect` body, `head`[x, y], `bottom`[x, y], `span` feet·hips·shoulders |
+| `example` / `scene` | 예시 사진 경로 / 사진이 없을 때 일러스트 배경 |
+
+예시 (시선 앞 여백):
+
+{"id":"cmp-gaze-room","category":"pose","title":"시선 앞 여백","angle":{"elevation_min":-5,"elevation_max":5,"roll_tolerance":3},"elements":[{"type":"arrow","points":[[0.58,0.36],[0.12,0.36]],"label":"시선","role":"gaze"}],"subjects":[{"detect":"face","anchor":[0.7,0.36],"radius":0.06,"size":[0.1,0.2],"gaze":"left"}]}
+
+| 구도 | 탭 | 인식 | 조건 |
 |---|---|---|---|
-| 전신 | +5° ~ +10° | ±3° | 머리~발끝 |
-| 카페·반신 | -10° ~ 0° | ±3° | 머리~어깨, 하단 1/3 테이블 선 |
-| 풍경+인물 | -3° ~ +3° | ±2° | 머리~발끝, 지평선은 화면 가운데(수평일 때 물리적으로 놓이는 높이) |
-| 앉은 포즈 | 0° ~ +5° | ±3° | 머리~엉덩이, 다리 대각선 |
+| 중앙 배치 · 삼분할 · 카페·반신 | 기본/인물 | 얼굴 | 위치·크기·각도 |
+| 전신 | 기본/인물 | 포즈 | 머리·발끝·좌우·각도(+5~+10°) |
+| 여백 활용 · 소실점 · 풍경+인물 | 배경/여행 | 포즈 | 머리·발끝·좌우·각도 |
+| 프레임 속 프레임 | 배경/여행 | 얼굴 | 위치·크기·각도 |
+| 시선 앞 여백 | 포즈/느낌 | 얼굴 | 위치·크기·시선(12° 이상)·각도 |
+| 앉은 포즈 | 포즈/느낌 | 포즈 | 머리·엉덩이·각도 |
+| 2인 높낮이 · 2인 앞뒤 | 특수/2인 | 얼굴 2명 | 각자 위치·크기·각도 |
 
-서버 `pitch_deg`는 위를 볼 때 음수이므로 `AngleSpec.target`에서 변환한다.
+선(문틀·복도·테이블·지평선)에 배경이 맞는지는 판정하지 않고 안내만 한다.
 
 ### 6.5 각도 판정
 
