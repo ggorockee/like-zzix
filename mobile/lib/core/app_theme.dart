@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 
-/// 라익찍스 색상 체계. 앱 UI는 아래 3가지 색(+ 글자·선용 흰색)만 쓴다.
+/// 라익찍스 색상 체계. 앱 UI는 유채색 3가지와 무채색(잉크·흰색)만 쓴다.
 ///
 /// | 역할 | 색 | 쓰는 곳 |
 /// |---|---|---|
-/// | 핵심 | [coral] | 로고·스플래시·선택 상태·주요 버튼·"아직 안 맞음" |
-/// | 서브 1 | [mint] | 구도·각도가 맞았을 때만 |
-/// | 서브 2 | [ink] | 배경·시트·카메라 위 반투명 판·코랄/민트 위 글자 |
+/// | 핵심 | [coral] | 로고·스플래시·선택 상태·주요 버튼·어긋난 관절 |
+/// | 서브 1 | [mint] | 신호: 지금 찍으면 됨 |
+/// | 서브 2 | [amber] | 신호: 각도 이탈 |
+/// | 무채색 | [ink]·[white] | 배경·반투명 판·글자·선 |
 ///
 /// 나머지 상수는 모두 위 색의 투명도·밝기 단계다. 다른 파일에서 색을 새로 만들지 않는다
 /// (`test/core/app_theme_test.dart`가 검사).
@@ -14,10 +15,13 @@ abstract final class AppTheme {
   /// 핵심 색
   static const coral = Color(0xFFFF5A7A);
 
-  /// 서브 1: 구도 일치
+  /// 서브 1: 구도·각도 일치 신호
   static const mint = Color(0xFF2EE6A0);
 
-  /// 서브 2: 배경
+  /// 서브 2: 각도 이탈 신호
+  static const amber = Color(0xFFFFD60A);
+
+  /// 무채색: 배경
   static const ink = Color(0xFF14121A);
 
   /// 무채색: 글자·선

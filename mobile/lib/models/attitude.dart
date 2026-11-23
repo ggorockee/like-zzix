@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 
+import 'low_pass_filter.dart';
+
 /// 세로 모드 기준 휴대폰 자세 (도 단위).
 ///
 /// - [pitchDeg]: 카메라가 수평보다 아래를 보면 +, 위를 보면 − (`01_MOBILE.md` 5장과 동일)
@@ -12,18 +14,9 @@ class Attitude {
 
   /// 중력 가속도(Android 규약: 정지 시 위쪽 축이 +g)로 계산.
   /// 세로로 세우면 (0, g, 0), 화면이 하늘을 보게 눕히면 (0, 0, g).
-  factory Attitude.fromGravity(
-    double x,
-    double y,
-    double z, {
-    double yawDeg = 0,
-  }) {
+  factory Attitude.fromGravity(double x, double y, double z) {
     const toDeg = 180 / math.pi;
-    return Attitude(
-      math.atan2(z, y) * toDeg,
-      math.atan2(x, y) * toDeg,
-      yawDeg: yawDeg,
-    );
+    return Attitude(math.atan2(z, y) * toDeg, math.atan2(x, y) * toDeg);
   }
 
   final double pitchDeg;
@@ -31,6 +24,9 @@ class Attitude {
 
   /// 최근에 왼쪽으로 돌린 각도(+). 좌우는 목표 방위가 없으므로 가만히 있으면 0으로 돌아온다.
   final double yawDeg;
+
+  /// 카메라가 위를 보는 각도 (로우앵글 +). 권장 각도([AngleSpec])와 같은 부호.
+  double get elevationDeg => -pitchDeg;
 
   /// 전면 카메라 기준 자세: 카메라가 반대쪽을 보므로 상하가 뒤집히고,
   /// 프리뷰가 좌우반전이라 좌우 회전도 뒤집힌다. 화면에 보이는 수평(roll)은 같다.
@@ -44,13 +40,22 @@ class Attitude {
       'Attitude(pitch ${pitchDeg.toStringAsFixed(1)}, roll ${rollDeg.toStringAsFixed(1)})';
 }
 
-/// 가속도계(느리지만 안 밀림)와 자이로(빠르지만 밀림)를 합친 자세 추정.
-/// 자이로가 없는 기기에서는 가속도계 저역 통과 필터로만 동작한다.
+/// 가속도계(느리지만 안 밀림)와 자이로(빠르지만 밀림)를 합친 자세 추정 + 손떨림 로우패스.
+///
+/// 1. 중력 추정: 자이로로 빠르게 돌리고, 가속도계 쪽으로 [gravityTau]만큼 천천히 수렴
+/// 2. 출력 각도: [smoothTau] 로우패스로 손떨림(약 8~12Hz) 제거
+///
+/// 자이로가 없는 기기에서는 가속도계만으로 동작한다.
 class AttitudeFilter {
   AttitudeFilter({
     this.gravityTau = const Duration(milliseconds: 370),
     this.yawTau = const Duration(milliseconds: 800),
-  });
+    Duration smoothTau = const Duration(milliseconds: 90),
+  }) : _pitch = AngleLowPassFilter(smoothTau),
+       _roll = AngleLowPassFilter(smoothTau);
+
+  final AngleLowPassFilter _pitch;
+  final AngleLowPassFilter _roll;
 
   /// 가속도계 값으로 수렴하는 시간 상수
   final Duration gravityTau;
@@ -79,7 +84,12 @@ class AttitudeFilter {
     _x = _x == null ? x : _x! + k * (x - _x!);
     _y = _y == null ? y : _y! + k * (y - _y!);
     _z = _z == null ? z : _z! + k * (z - _z!);
-    return Attitude.fromGravity(_x!, _y!, _z!, yawDeg: _yawRad * 180 / math.pi);
+    final raw = Attitude.fromGravity(_x!, _y!, _z!);
+    return Attitude(
+      _pitch.add(raw.pitchDeg, dt),
+      _roll.add(raw.rollDeg, dt),
+      yawDeg: _yawRad * 180 / math.pi,
+    );
   }
 
   /// 각속도(rad/s, 기기 축 기준 오른손 법칙).
@@ -99,95 +109,5 @@ class AttitudeFilter {
     if (norm == 0) return;
     final rate = (wx * gx + wy * gy + wz * gz) / norm;
     _yawRad = (_yawRad + rate * dt) * math.exp(-dt / _seconds(yawTau));
-  }
-}
-
-enum TiltHint { none, aimUp, aimDown }
-
-enum LevelHint { none, rotateClockwise, rotateCounterClockwise }
-
-/// 목표 각도와의 차이 및 안내.
-@immutable
-class AngleGuide {
-  const AngleGuide({
-    required this.pitchDelta,
-    required this.rollDelta,
-    required this.matched,
-    required this.tilt,
-    required this.level,
-    this.upright = true,
-    this.yawDeg = 0,
-  });
-
-  /// 현재 − 목표 (도)
-  final double pitchDelta;
-  final double rollDelta;
-  final bool matched;
-  final TiltHint tilt;
-  final LevelHint level;
-
-  /// false면 폰을 세워 달라는 안내가 우선 (이때 roll은 0으로 취급).
-  final bool upright;
-
-  /// 최근 좌우 회전 ([Attitude.yawDeg])
-  final double yawDeg;
-}
-
-/// 목표 각도 일치 판정. 경계에서 깜빡이지 않도록 히스테리시스 적용.
-class AngleMatcher {
-  AngleMatcher({
-    this.pitchTolerance = 3,
-    this.rollTolerance = 2,
-    this.releaseFactor = 1.5,
-  });
-
-  final double pitchTolerance;
-  final double rollTolerance;
-
-  /// 일치 상태에서 해제되려면 허용 오차의 몇 배를 벗어나야 하는지.
-  final double releaseFactor;
-
-  bool _matched = false;
-
-  AngleGuide evaluate(
-    Attitude attitude, {
-    required double targetPitchDeg,
-    double targetRollDeg = 0,
-  }) {
-    final pitchDelta = attitude.pitchDeg - targetPitchDeg;
-    if (!attitude.isUpright) {
-      _matched = false;
-      return AngleGuide(
-        pitchDelta: pitchDelta,
-        rollDelta: 0,
-        matched: false,
-        tilt: pitchDelta > 0 ? TiltHint.aimUp : TiltHint.aimDown,
-        level: LevelHint.none,
-        upright: false,
-        yawDeg: attitude.yawDeg,
-      );
-    }
-    final rollDelta = attitude.rollDeg - targetRollDeg;
-    final factor = _matched ? releaseFactor : 1.0;
-    final pitchOk = pitchDelta.abs() <= pitchTolerance * factor;
-    final rollOk = rollDelta.abs() <= rollTolerance * factor;
-    _matched = pitchOk && rollOk;
-
-    return AngleGuide(
-      pitchDelta: pitchDelta,
-      rollDelta: rollDelta,
-      matched: _matched,
-      tilt: pitchOk
-          ? TiltHint.none
-          : pitchDelta > 0
-          ? TiltHint.aimUp
-          : TiltHint.aimDown,
-      level: rollOk
-          ? LevelHint.none
-          : rollDelta > 0
-          ? LevelHint.rotateClockwise
-          : LevelHint.rotateCounterClockwise,
-      yawDeg: attitude.yawDeg,
-    );
   }
 }

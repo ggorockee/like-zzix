@@ -8,15 +8,15 @@ import 'package:go_router/go_router.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:likezzix/app.dart';
 import 'package:likezzix/models/attitude.dart';
-import 'package:likezzix/models/guide_motion.dart';
 import 'package:likezzix/models/preset.dart';
+import 'package:likezzix/models/subject.dart';
 import 'package:likezzix/providers/attitude_providers.dart';
 import 'package:likezzix/providers/camera_providers.dart';
-import 'package:likezzix/providers/guide_motion_provider.dart';
-import 'package:likezzix/providers/pose_providers.dart';
+import 'package:likezzix/providers/subject_providers.dart';
 import 'package:likezzix/providers/preset_providers.dart';
 import 'package:likezzix/screens/camera_screen.dart';
 import 'package:likezzix/services/preset_repository.dart';
+import 'package:likezzix/widgets/dynamic_frame.dart';
 import 'package:likezzix/widgets/preset_bottom_sheet.dart';
 import 'package:likezzix/widgets/silhouette_painter.dart';
 
@@ -46,14 +46,20 @@ void main() {
           ref.onDispose(router.dispose);
           return router;
         }),
-        presetsProvider.overrideWith((ref) async => presets),
+        presetsProvider.overrideWith(
+          (ref) async => [
+            ...await PresetRepository().loadTemplates(),
+            ...presets,
+          ],
+        ),
         availableCamerasProvider.overrideWith((ref) async => const []),
-        poseClockProvider.overrideWithValue(() => now),
+        subjectClockProvider.overrideWithValue(() => now),
         attitudeProvider.overrideWith((ref) {
           final preset = ref.watch(selectedPresetProvider);
           return Stream.periodic(
             const Duration(milliseconds: 50),
-            (_) => Attitude((preset?.pitchDeg ?? 0) + pitchOffset, 0),
+            (_) =>
+                Attitude(-(preset?.angle.elevationMid ?? 0) + pitchOffset, 0),
           );
         }),
         cameraBackdropProvider.overrideWithValue(const _DemoBackdrop()),
@@ -77,20 +83,33 @@ void main() {
       await _settle(tester);
     }
 
-    /// 레퍼런스 관절을 실시간 관절로 넣어 구도 일치(Perfect Match) 상태를 만든다.
-    Future<void> perfect() async {
-      final live = container.read(selectedPresetProvider)!.landmarks;
-      final pose = container.read(poseMatchProvider.notifier);
-      pose.update(live);
-      now = now.add(const Duration(seconds: 1));
-      pose.update(live);
+    /// 사람이 화면에 있는 상태를 만든다. [scale]은 목표 대비 크기, [shift]는 위치 차이.
+    Future<void> person({double scale = 1, Offset shift = Offset.zero}) async {
+      final finder = tester.getSize(find.byType(DynamicFrame));
+      final target = SubjectTarget.of(
+        container.read(selectedPresetProvider)!,
+        finder,
+      )!;
+      final center =
+          target.subject[BodyAnchor.hips] ??
+          target.subject[BodyAnchor.shoulders]!;
+      final live = Subject({
+        for (final e in target.subject.points.entries)
+          e.key: center + (e.value - center) * scale + shift,
+      }, halfWidth: target.subject.halfWidth * scale);
+      for (var i = 0; i < 15; i++) {
+        now = now.add(const Duration(milliseconds: 100));
+        container
+            .read(subjectProvider.notifier)
+            .update(live, target, focal: finder.height);
+      }
       await _settle(tester);
     }
 
     // 1. 전신샷: 실루엣에 맞추면 "지금 찍으세요"
     pitchOffset = 0;
     await select(fullBody);
-    await perfect();
+    await person();
     await binding.takeScreenshot('01_perfect_match');
 
     // 2. 구도 프리셋 목록
@@ -101,22 +120,10 @@ void main() {
     await _settle(tester);
 
     // 3. 음료 컷: 각도가 어긋나면 어느 쪽으로 얼마나 기울일지 안내
-    pitchOffset = 9;
+    pitchOffset = 12; // 권장 범위(±3°)까지 9°
     await select(cafe);
     // 사람은 구도에 맞았지만 폰 각도만 어긋난 상태
-    final screen = tester.getSize(find.byType(CameraScreen));
-    final person = container
-        .read(guideMotionProvider)
-        .displace(
-          cafe.landmarks,
-          screen: screen,
-          frame: SilhouettePainter.frameRect(screen, cafe.aspectRatio),
-          focal: GuideMotion.focalLength(screen.height, 1),
-        );
-    container
-        .read(poseMatchProvider.notifier)
-        .update(person, reference: person);
-    await _settle(tester);
+    await person();
     await binding.takeScreenshot('03_angle_guide');
   });
 }
@@ -156,24 +163,9 @@ class _DemoBackdrop extends ConsumerWidget {
                 child: Image.asset(asset, fit: BoxFit.cover),
               ),
             ),
-            // 실제 카메라처럼 폰 각도에 따라 장면도 움직인다
-            Positioned.fill(
-              child: Transform(
-                transform: ref
-                    .watch(guideMotionProvider)
-                    .matrix(
-                      constraints.biggest,
-                      GuideMotion.focalLength(constraints.maxHeight, 1),
-                    ),
-                child: Stack(
-                  children: [
-                    Positioned.fromRect(
-                      rect: frame,
-                      child: Image.asset(asset, fit: BoxFit.fill),
-                    ),
-                  ],
-                ),
-              ),
+            Positioned.fromRect(
+              rect: frame,
+              child: Image.asset(asset, fit: BoxFit.fill),
             ),
           ],
         );

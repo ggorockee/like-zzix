@@ -3,10 +3,11 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../models/preset.dart';
+import 'guide_stroke.dart';
 
 /// 프리셋 실루엣을 그린다.
 ///
-/// - 윤곽선([Preset.outline])이 있으면: 부드러운 곡선 + 글로우 + 옅은 채움
+/// - 윤곽선([Preset.outline])이 있으면: 부드러운 곡선 + 어두운 외곽 그림자
 /// - 없으면: 관절로 만든 볼륨형 마네킹 실루엣
 ///
 /// 좌표는 프리셋 비율 프레임 기준 0~1이므로, 캔버스 안에 그 비율의 사각형을
@@ -16,14 +17,12 @@ class SilhouettePainter extends CustomPainter {
     required this.preset,
     required this.color,
     this.strokeWidth = 3,
-    this.glow = true,
     this.fillOpacity = 0.12,
   });
 
   final Preset preset;
   final Color color;
   final double strokeWidth;
-  final bool glow;
   final double fillOpacity;
 
   /// [size] 안에서 [aspectRatio](가로/세로) 프레임이 차지하는 영역.
@@ -68,7 +67,7 @@ class SilhouettePainter extends CustomPainter {
     // 채움은 폐곡선 전체로
     if (fillOpacity > 0) {
       canvas.drawPath(
-        _smoothPath(points, closed: true),
+        GuideStroke.smooth(points, closed: true),
         Paint()..color = color.withValues(alpha: fillOpacity),
       );
     }
@@ -77,11 +76,11 @@ class SilhouettePainter extends CustomPainter {
     final stroke = Path();
     for (final run in _visibleRuns(preset.outline)) {
       stroke.addPath(
-        _smoothPath([for (final i in run) points[i]], closed: false),
+        GuideStroke.smooth([for (final i in run) points[i]], closed: false),
         Offset.zero,
       );
     }
-    _strokeWithGlow(canvas, stroke);
+    GuideStroke.draw(canvas, stroke, color: color, width: strokeWidth);
   }
 
   /// 잘린 경계(이미지 테두리 또는 가장 아래쪽의 수평 직선)를 제외한 연속 구간들.
@@ -122,27 +121,6 @@ class SilhouettePainter extends CustomPainter {
     }
     if (current.length > 1) runs.add(current);
     return runs;
-  }
-
-  /// Catmull-Rom 스플라인을 3차 베지어로 변환한 부드러운 경로.
-  static Path _smoothPath(List<Offset> pts, {required bool closed}) {
-    final path = Path();
-    if (pts.length < 2) return path;
-    final n = pts.length;
-    Offset at(int i) => closed ? pts[(i % n + n) % n] : pts[i.clamp(0, n - 1)];
-    path.moveTo(pts[0].dx, pts[0].dy);
-    final segments = closed ? n : n - 1;
-    for (var i = 0; i < segments; i++) {
-      final p0 = at(i - 1);
-      final p1 = at(i);
-      final p2 = at(i + 1);
-      final p3 = at(i + 2);
-      final c1 = p1 + (p2 - p0) / 6;
-      final c2 = p2 - (p3 - p1) / 6;
-      path.cubicTo(c1.dx, c1.dy, c2.dx, c2.dy, p2.dx, p2.dy);
-    }
-    if (closed) path.close();
-    return path;
   }
 
   // ---------------------------------------------------------------------------
@@ -221,35 +199,10 @@ class SilhouettePainter extends CustomPainter {
         .transform(matrix.storage);
   }
 
-  void _strokeWithGlow(Canvas canvas, Path path) {
-    if (glow) {
-      canvas.drawPath(
-        path,
-        Paint()
-          ..color = color.withValues(alpha: 0.55)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = strokeWidth * 2.5
-          ..strokeCap = StrokeCap.round
-          ..strokeJoin = StrokeJoin.round
-          ..maskFilter = MaskFilter.blur(BlurStyle.normal, strokeWidth * 1.5),
-      );
-    }
-    canvas.drawPath(
-      path,
-      Paint()
-        ..color = color
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = strokeWidth
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round,
-    );
-  }
-
   @override
   bool shouldRepaint(SilhouettePainter old) =>
       old.preset != preset ||
       old.color != color ||
       old.strokeWidth != strokeWidth ||
-      old.glow != glow ||
       old.fillOpacity != fillOpacity;
 }

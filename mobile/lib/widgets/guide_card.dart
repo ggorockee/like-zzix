@@ -14,13 +14,13 @@ class GuideCard extends StatefulWidget {
 }
 
 class _GuideCardState extends State<GuideCard> {
-  bool _expanded = true;
+  bool _expanded = false;
 
   @override
   void didUpdateWidget(GuideCard old) {
     super.didUpdateWidget(old);
-    // 다른 프리셋을 고르면 다시 펼쳐서 보여준다.
-    if (old.preset != widget.preset) _expanded = true;
+    // 가이드를 가리지 않도록 접은 상태로 시작
+    if (old.preset.id != widget.preset.id) _expanded = false;
   }
 
   @override

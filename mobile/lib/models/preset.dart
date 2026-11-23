@@ -2,12 +2,17 @@ import 'dart:ui' show Offset;
 
 import 'package:flutter/foundation.dart';
 
+import 'angle_spec.dart';
+import 'silhouette_template.dart';
+
 /// 프리셋 카테고리. `id`는 서버/번들 JSON의 `category` 값.
 enum PresetCategory {
   fullBody('full_body', '전신샷'),
   lookBack('look_back', '부르고 찍기'),
   side('side', '옆모습'),
-  cafe('cafe', '음료·카페');
+  cafe('cafe', '음료·카페'),
+  landscape('landscape', '풍경'),
+  sitting('sitting', '앉은 포즈');
 
   const PresetCategory(this.id, this.label);
 
@@ -56,9 +61,21 @@ abstract final class PoseIndex {
   static const leftAnkle = 27;
   static const rightAnkle = 28;
   static const count = 33;
+
+  /// 좌우를 바꾼 관절 번호 (코만 짝이 없음)
+  static int mirrorOf(int i) => switch (i) {
+    0 => 0,
+    >= 1 && <= 3 => i + 3,
+    >= 4 && <= 6 => i - 3,
+    _ => i.isOdd ? i + 1 : i - 1,
+  };
 }
 
-/// 구도 프리셋 (`01_MOBILE.md` 5장 스키마).
+/// 구도 프리셋. 두 종류가 있다.
+/// - 실루엣 템플릿([template] 있음): 상황별 기본 구도
+/// - 사진 프리셋: 레퍼런스 사진 (`01_MOBILE.md` 5장 스키마)
+///
+/// 둘 다 목표 인물 자리([SubjectTarget])와 권장 각도([angle])만 뽑아 실시간 인물과 비교한다.
 @immutable
 class Preset {
   const Preset({
@@ -67,10 +84,11 @@ class Preset {
     required this.title,
     required this.tip,
     required this.aspectRatio,
-    required this.pitchDeg,
-    required this.rollDeg,
-    required this.landmarks,
+    required this.angle,
     required this.sortOrder,
+    this.landmarks = const [],
+    this.template,
+    this.mirrored = false,
     this.guide = const [],
     this.outline = const [],
     this.referenceAsset,
@@ -94,8 +112,10 @@ class Preset {
       title: json['title'] as String,
       tip: json['tip'] as String? ?? '',
       aspectRatio: _parseAspectRatio(json['aspect_ratio'] as String?),
-      pitchDeg: (camera['pitch_deg'] as num?)?.toDouble() ?? 0,
-      rollDeg: (camera['roll_deg'] as num?)?.toDouble() ?? 0,
+      angle: AngleSpec.target(
+        pitchDeg: (camera['pitch_deg'] as num?)?.toDouble() ?? 0,
+        rollDeg: (camera['roll_deg'] as num?)?.toDouble() ?? 0,
+      ),
       landmarks: landmarks,
       sortOrder: (json['sort_order'] as num?)?.toInt() ?? 0,
       guide: [
@@ -114,6 +134,25 @@ class Preset {
     );
   }
 
+  /// 실루엣 템플릿 (`assets/templates/templates.json`)
+  factory Preset.fromTemplateJson(Map<String, dynamic> json, int order) =>
+      Preset(
+        id: json['id'] as String,
+        category:
+            PresetCategory.tryParse(json['category'] as String?) ??
+            PresetCategory.fullBody,
+        title: json['title'] as String,
+        tip: json['tip'] as String? ?? '',
+        aspectRatio: 3 / 4,
+        angle: AngleSpec.fromJson(json['angle'] as Map<String, dynamic>),
+        sortOrder: order,
+        guide: [
+          for (final step in json['guide'] as List<dynamic>? ?? const [])
+            step as String,
+        ],
+        template: SilhouetteTemplate.fromJson(json),
+      );
+
   final String id;
   final PresetCategory category;
   final String title;
@@ -121,9 +160,18 @@ class Preset {
 
   /// 가로/세로 비율 (예: "3:4" → 0.75)
   final double aspectRatio;
-  final double pitchDeg;
-  final double rollDeg;
+
+  /// 권장 촬영 각도
+  final AngleSpec angle;
+
+  /// 레퍼런스 관절. 실루엣 템플릿은 비어 있음.
   final List<PoseLandmark> landmarks;
+
+  /// 선 실루엣 (사진 프리셋은 null)
+  final SilhouetteTemplate? template;
+
+  /// 좌우 반전된 상태인지
+  final bool mirrored;
   final int sortOrder;
 
   /// 이 구도대로 찍기 위한 단계별 안내.
@@ -138,6 +186,35 @@ class Preset {
   /// 관리자 콘솔에서 올린 레퍼런스 사진 경로 (서버 기준 상대 경로, 예: /v1/presets/{id}/image?v=...).
   final String? referenceUrl;
 
+  bool get isTemplate => template != null;
+
+  bool get hasLandmarks => landmarks.length >= PoseIndex.count;
+
+  /// 좌우를 뒤집은 프리셋 (다시 부르면 원래대로).
+  Preset get flipped => Preset(
+    id: id,
+    category: category,
+    title: title,
+    tip: tip,
+    aspectRatio: aspectRatio,
+    angle: angle,
+    sortOrder: sortOrder,
+    guide: guide,
+    landmarks: [
+      if (hasLandmarks)
+        for (var i = 0; i < PoseIndex.count; i++)
+          () {
+            final l = landmarks[PoseIndex.mirrorOf(i)];
+            return PoseLandmark(1 - l.x, l.y, l.likelihood);
+          }(),
+    ],
+    outline: [for (final p in outline) Offset(1 - p.dx, p.dy)],
+    referenceAsset: referenceAsset,
+    referenceUrl: referenceUrl,
+    template: template?.mirrored,
+    mirrored: !mirrored,
+  );
+
   bool get hasOutline => outline.length >= 3;
 
   static double _parseAspectRatio(String? value) {
@@ -150,8 +227,9 @@ class Preset {
   }
 
   @override
-  bool operator ==(Object other) => other is Preset && other.id == id;
+  bool operator ==(Object other) =>
+      other is Preset && other.id == id && other.mirrored == mirrored;
 
   @override
-  int get hashCode => id.hashCode;
+  int get hashCode => Object.hash(id, mirrored);
 }

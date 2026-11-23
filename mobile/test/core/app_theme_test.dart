@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:likezzix/core/app_theme.dart';
 
 void main() {
-  test('색은 app_theme.dart에서만 정의한다 (3색 체계)', () {
+  test('색은 app_theme.dart에서만 정의한다 (유채색 3 + 무채색)', () {
     final literal = RegExp(
       r'Color\(0x|Color\.from|Colors\.(?!transparent\b)[a-z]',
     );
@@ -45,6 +45,7 @@ void main() {
 
     expect(contrast(AppTheme.coral, AppTheme.ink), greaterThan(4.5));
     expect(contrast(AppTheme.mint, AppTheme.ink), greaterThan(4.5));
+    expect(contrast(AppTheme.amber, AppTheme.ink), greaterThan(4.5));
     expect(contrast(AppTheme.white, AppTheme.ink), greaterThan(4.5));
   });
 }

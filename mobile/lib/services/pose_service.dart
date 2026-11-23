@@ -19,9 +19,11 @@ class PoseFrame {
 
 /// ML Kit 포즈 인식 (스트림 모드). 한 번에 한 프레임만 처리하고 [minInterval]로 제한.
 class PoseService {
-  PoseService({this.minInterval = const Duration(milliseconds: 90)});
+  /// 사람이 있을 때 / 없을 때의 최소 처리 간격 (없을 때는 발열을 줄인다)
+  static const activeInterval = Duration(milliseconds: 60);
+  static const idleInterval = Duration(milliseconds: 180);
 
-  final Duration minInterval;
+  Duration minInterval = activeInterval;
   final _detector = mlkit.PoseDetector(
     options: mlkit.PoseDetectorOptions(
       mode: mlkit.PoseDetectionMode.stream,
@@ -32,7 +34,7 @@ class PoseService {
   bool _busy = false;
   bool _closed = false;
 
-  // 디버그 빌드 진단: 2초마다 처리 프레임 수·인식 결과를 로그로 남김
+  // 디버그·프로파일 빌드 진단: 2초마다 처리 프레임 수·인식 결과를 로그로 남김
   int _processed = 0;
   int _withPerson = 0;
   DateTime _statsSince = DateTime.now();
@@ -86,7 +88,7 @@ class PoseService {
   }
 
   void _logStats({required bool personFound, required CameraImage image}) {
-    if (!kDebugMode) return;
+    if (kReleaseMode) return;
     _processed++;
     if (personFound) _withPerson++;
     final elapsed = DateTime.now().difference(_statsSince);

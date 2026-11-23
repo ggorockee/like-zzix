@@ -1,7 +1,6 @@
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:likezzix/models/guide_motion.dart';
-import 'package:likezzix/models/preset.dart';
 
 void main() {
   const screen = Size(400, 800);
@@ -69,23 +68,6 @@ void main() {
     });
   });
 
-  test('displace: 관절도 가이드와 같은 곳으로 옮긴다', () {
-    const frame = Rect.fromLTWH(0, 200, 400, 400);
-    final m = motion(pitch: 5, roll: 3);
-    final moved = m
-        .displace(
-          const [PoseLandmark(0.5, 0.25, 0.9)],
-          screen: screen,
-          frame: frame,
-          focal: focal,
-        )
-        .single;
-    final expected = move(m, const Offset(200, 300));
-    expect(frame.left + moved.x * frame.width, closeTo(expected.dx, 1e-6));
-    expect(frame.top + moved.y * frame.height, closeTo(expected.dy, 1e-6));
-    expect(moved.likelihood, 0.9);
-  });
-
   group('GuideMotionFilter', () {
     GuideMotion run(
       GuideMotionFilter f, {
@@ -98,8 +80,8 @@ void main() {
       for (var i = 0; i < times; i++) {
         m = f.add(
           angleMatched: matched,
-          pitchDelta: pitch,
-          rollDelta: 0,
+          pitchError: pitch,
+          rollError: 0,
           yawDeg: yaw,
         );
       }

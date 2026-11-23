@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../models/attitude.dart';
+import '../models/angle_state.dart';
 import '../models/guide_motion.dart';
 import 'attitude_providers.dart';
 import 'preset_providers.dart';
@@ -20,8 +20,8 @@ class GuideMotionNotifier extends Notifier<GuideMotion> {
         ? GuideMotion.still
         : filter.add(
             angleMatched: guide.matched,
-            pitchDelta: guide.pitchDelta,
-            rollDelta: guide.rollDelta,
+            pitchError: guide.pitchError,
+            rollError: guide.rollError,
             yawDeg: guide.yawDeg,
           );
     ref.listen(angleGuideProvider, (_, guide) => state = next(guide));

@@ -1,22 +1,31 @@
 import 'dart:async';
 
 import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/app_theme.dart';
+import '../models/auto_shutter.dart';
+import '../models/coach.dart';
+import '../models/angle_state.dart';
 import '../models/guide_motion.dart';
+import '../models/lens_choice.dart';
 import '../models/preset.dart';
 import '../providers/camera_providers.dart';
 import '../providers/preset_providers.dart';
 import '../services/capture_service.dart';
 import '../models/preview_transform.dart';
+import '../models/silhouette_template.dart';
+import '../models/subject.dart';
 import '../models/zoom_range.dart';
 import '../providers/api_providers.dart';
 import '../providers/attitude_providers.dart';
 import '../providers/guide_motion_provider.dart';
-import '../providers/pose_providers.dart';
+import '../providers/shooting_providers.dart';
+import '../providers/subject_providers.dart';
+import '../services/photo_cropper.dart';
 import '../services/pose_service.dart';
 import '../services/telemetry_service.dart';
 import '../widgets/angle_indicator.dart';
@@ -24,17 +33,20 @@ import '../widgets/camera_preview_fullscreen.dart';
 import '../widgets/frame_guide.dart';
 import '../widgets/gallery_button.dart';
 import '../widgets/guide_card.dart';
-import '../widgets/guide_status.dart';
+import '../widgets/coach_pill.dart';
+import '../widgets/dynamic_frame.dart';
+import '../widgets/lock_button.dart';
 import '../widgets/opacity_slider.dart';
 import '../widgets/preset_bottom_sheet.dart';
 import '../widgets/reference_image.dart';
 import '../widgets/reference_overlay.dart';
 import '../widgets/reference_pip.dart';
 import '../widgets/shutter_button.dart';
-import '../widgets/silhouette_painter.dart';
+import '../widgets/template_painter.dart';
 import '../widgets/zoom_selector.dart';
 
-/// 메인 카메라 화면: 풀스크린 프리뷰 + 레퍼런스 오버레이 + 실시간 구도 판정 + 촬영 컨트롤.
+/// 메인 카메라 화면: 뷰파인더(프리뷰 + 가이드) + 설정 컨트롤 + 촬영 컨트롤.
+/// 잠금 중에는 셔터·배율·잠금 해제만 남긴다.
 class CameraScreen extends ConsumerStatefulWidget {
   const CameraScreen({super.key});
 
@@ -59,12 +71,24 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   /// 진행 중인 카메라 열기 작업 (동시에 두 번 열지 않도록 직렬화).
   Future<void>? _opening;
 
-  /// 실시간 포즈 인식 (프리셋을 골랐을 때만 이미지 스트림 실행)
+  /// 실시간 인물 인식 (프리셋을 골랐을 때만 이미지 스트림 실행)
   final _pose = PoseService();
   bool _streaming = false;
 
-  /// 프레임 좌표 변환에 쓰는 마지막 화면 크기
-  Size _screenSize = Size.zero;
+  /// 프레임 좌표 변환에 쓰는 마지막 뷰파인더 크기
+  Size _finderSize = Size.zero;
+
+  /// 별도 초광각 카메라 (iOS). 없으면 null.
+  CameraDescription? _ultraWide;
+  bool _onUltraWide = false;
+
+  /// 프리셋 시트가 열려 있으면 자동·볼륨 촬영을 막는다.
+  bool _sheetOpen = false;
+
+  late final _autoShutter = AutoShutter(
+    onFire: () => unawaited(_capture(AppEvent.autoCaptured)),
+  );
+  StreamSubscription<void>? _volume;
 
   /// 줌 (기기 지원 범위 ∩ 0.5~3배)
   ZoomRange _zoomRange = ZoomRange.none;
@@ -86,6 +110,8 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     WidgetsBinding.instance.removeObserver(this);
     unawaited(_controller?.dispose());
     unawaited(_pose.close());
+    unawaited(_volume?.cancel());
+    _autoShutter.dispose();
     super.dispose();
   }
 
@@ -96,6 +122,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       case AppLifecycleState.inactive || AppLifecycleState.paused:
         // 백그라운드/권한 팝업: 카메라를 놓아준다.
         _foreground = false;
+        _syncShutterTriggers();
         final controller = _controller;
         if (controller == null) return;
         _streaming = false;
@@ -126,10 +153,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       _record(AppEvent.cameraUnavailable);
       return;
     }
-    final description = cameras.firstWhere(
-      (c) => c.lensDirection == _lens,
-      orElse: () => cameras.first,
-    );
+    final description = LensChoice.main(cameras, _lens) ?? cameras.first;
     final controller = CameraController(
       description,
       ResolutionPreset.high,
@@ -162,9 +186,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       _controller = controller;
       _setLens(description.lensDirection);
       _issue = _CameraIssue.none;
-      _zoomRange = zoomRange;
-      _zoom = zoomRange.clamp(1);
+      _useLensRange(cameras, zoomRange);
     });
+    _syncShutterTriggers();
     await old?.dispose();
     await _applyZoom(controller);
     await _syncPoseStream();
@@ -196,18 +220,88 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
 
   Future<void> _applyZoom(CameraController controller) async {
     try {
-      await controller.setZoomLevel(_zoom);
+      await controller.setZoomLevel(
+        LensChoice.deviceZoom(_zoom, onUltraWide: _onUltraWide),
+      );
     } on CameraException catch (e) {
       debugPrint('[Camera] 줌 설정 실패: ${e.code}');
     }
   }
 
+  /// 새로 연 기본 카메라의 줌 범위를 반영. 별도 초광각이 있으면 0.5배까지 넓힌다.
+  void _useLensRange(List<CameraDescription> cameras, ZoomRange range) {
+    _onUltraWide = false;
+    _ultraWide = LensChoice.ultraWide(cameras, _lens, range);
+    _zoomRange = _ultraWide == null ? range : range.withUltraWide;
+    _zoom = range.clamp(1);
+  }
+
   void _setZoom(double level) {
     final controller = _controller;
     final next = _zoomRange.clamp(level);
-    if (controller == null || (next - _zoom).abs() < 0.01) return;
+    if (controller == null || _switching || (next - _zoom).abs() < 0.01) return;
     setState(() => _zoom = next);
-    unawaited(_applyZoom(controller));
+    final wantUltraWide = _ultraWide != null && next < 1;
+    unawaited(
+      wantUltraWide == _onUltraWide
+          ? _applyZoom(controller)
+          : _switchUltraWide(controller, wantUltraWide),
+    );
+  }
+
+  Future<void> _switchUltraWide(CameraController controller, bool use) async {
+    final cameras = await ref.read(availableCamerasProvider.future);
+    final target = use ? _ultraWide : LensChoice.main(cameras, _lens);
+    if (target == null || !mounted) return;
+    setState(() => _switching = true);
+    await _pauseStream();
+    try {
+      await controller.setDescription(target);
+      _onUltraWide = use;
+      await _applyZoom(controller);
+    } on CameraException catch (e) {
+      debugPrint('[Camera] 초광각 전환 실패: ${e.code}');
+      if (mounted) setState(() => _zoom = _onUltraWide ? ZoomRange.appMin : 1);
+    } finally {
+      if (mounted) setState(() => _switching = false);
+      _syncShutterTriggers();
+      await _syncPoseStream();
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 자동 촬영·볼륨 버튼
+  // ---------------------------------------------------------------------------
+
+  bool get _canShoot =>
+      _controller != null && _foreground && !_switching && !_sheetOpen;
+
+  /// 자동 촬영 상태와 볼륨 버튼 구독을 현재 화면 상태에 맞춘다.
+  void _syncShutterTriggers() {
+    if (!mounted) return;
+    _autoShutter.update(
+      ready: ref.read(shootSignalProvider) == ShootSignal.ready,
+      enabled: ref.read(autoShutterProvider) && _canShoot && !_capturing,
+    );
+    // 쓰지 않을 때는 구독을 끊어 볼륨 버튼의 원래 기능을 돌려준다.
+    if (_canShoot == (_volume != null)) return;
+    if (_canShoot) {
+      _volume = ref
+          .read(volumeButtonProvider)
+          .presses
+          .listen((_) => unawaited(_capture(AppEvent.volumeCaptured)));
+    } else {
+      unawaited(_volume?.cancel());
+      _volume = null;
+    }
+  }
+
+  Future<void> _openPresets() async {
+    _sheetOpen = true;
+    _syncShutterTriggers();
+    await showPresetBottomSheet(context);
+    _sheetOpen = false;
+    _syncShutterTriggers();
   }
 
   Future<void> _openGallery() {
@@ -231,7 +325,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
         _foreground &&
         !_capturing &&
         !_switching &&
-        ref.read(selectedPresetProvider) != null;
+        ref.read(activePresetProvider) != null;
     if (want == _streaming || controller == null) return;
     try {
       if (want) {
@@ -242,7 +336,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
         if (controller.value.isStreamingImages) {
           await controller.stopImageStream();
         }
-        ref.read(poseMatchProvider.notifier).clear();
+        ref.read(subjectProvider.notifier).clear();
       }
     } on CameraException catch (e) {
       debugPrint('[Pose] 이미지 스트림 전환 실패: ${e.code}');
@@ -264,59 +358,56 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     final controller = _controller;
     if (controller == null) return;
     final frame = await _pose.process(image, controller.description);
-    final preset = ref.read(selectedPresetProvider);
+    final preset = ref.read(activePresetProvider);
     final previewSize = controller.value.previewSize;
     if (frame == null ||
         !mounted ||
         !_streaming ||
         preset == null ||
         previewSize == null ||
-        _screenSize.isEmpty) {
+        _finderSize.isEmpty) {
       return;
     }
-    final frameRect = SilhouettePainter.frameRect(
-      _screenSize,
-      preset.aspectRatio,
-    );
+    final target = SubjectTarget.of(preset, _finderSize);
+    if (target == null) return;
     final transform = PreviewTransform(
-      screen: _screenSize,
+      screen: _finderSize,
       // previewSize는 센서 기준(가로)이므로 세로 화면 비율은 높이/너비
       previewAspect: previewSize.height / previewSize.width,
-      frame: frameRect,
+      // 관절을 뷰파인더 0~1 좌표로
+      frame: Offset.zero & _finderSize,
     );
-    final live = frame.landmarks == null
-        ? null
-        : [
-            for (final l in frame.landmarks!)
-              () {
-                final f = transform.toFrame(Offset(l.x, l.y));
-                return PoseLandmark(f.dx, f.dy, l.likelihood);
-              }(),
-          ];
-    // 화면에 보이는 가이드와 같은 위치를 기준으로 판정한다.
-    final motion = ref.read(guideMotionProvider);
+    final landmarks = frame.landmarks;
+    _pose.minInterval = landmarks == null
+        ? PoseService.idleInterval
+        : PoseService.activeInterval;
     ref
-        .read(poseMatchProvider.notifier)
+        .read(subjectProvider.notifier)
         .update(
-          live,
-          reference: motion.locked
-              ? null
-              : motion.displace(
-                  preset.landmarks,
-                  screen: _screenSize,
-                  frame: frameRect,
-                  focal: _focalLength,
-                ),
+          Subject.fromLandmarks(
+            landmarks == null
+                ? null
+                : [
+                    for (final l in landmarks)
+                      () {
+                        final p = transform.toFrame(Offset(l.x, l.y));
+                        return PoseLandmark(p.dx, p.dy, l.likelihood);
+                      }(),
+                  ],
+            _finderSize,
+          ),
+          target,
+          focal: _focalLength,
         );
   }
 
   /// 화면 단위 초점거리: 각도 1°가 화면에서 몇 px인지 정한다.
   double get _focalLength {
     final previewSize = _controller?.value.previewSize;
-    var height = _screenSize.height;
+    var height = _finderSize.height;
     if (previewSize != null) {
       height = PreviewTransform(
-        screen: _screenSize,
+        screen: _finderSize,
         previewAspect: previewSize.height / previewSize.width,
         frame: Rect.zero,
       ).previewRect.height;
@@ -333,9 +424,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
         ? CameraLensDirection.front
         : CameraLensDirection.back;
     final cameras = await ref.read(availableCamerasProvider.future);
-    final description = cameras
-        .where((c) => c.lensDirection == target)
-        .firstOrNull;
+    final description = LensChoice.main(cameras, target);
     if (description == null || !mounted) return;
 
     setState(() => _switching = true);
@@ -345,10 +434,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       _setLens(target);
       final range = await _readZoomRange(controller);
       if (mounted) {
-        setState(() {
-          _zoomRange = range;
-          _zoom = range.clamp(1);
-        });
+        setState(() => _useLensRange(cameras, range));
       }
       await _applyZoom(controller);
     } on CameraException catch (e) {
@@ -359,15 +445,23 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       await _startCamera();
     } finally {
       if (mounted) setState(() => _switching = false);
+      _syncShutterTriggers();
       await _syncPoseStream();
     }
   }
 
-  Future<void> _capture() async {
+  /// [trigger]는 화면 셔터가 아닌 경우의 촬영 방식 (지표용).
+  Future<void> _capture([AppEvent? trigger]) async {
     final controller = _controller;
-    if (controller == null || _capturing || !controller.value.isInitialized) {
+    if (controller == null ||
+        _capturing ||
+        _switching ||
+        !controller.value.isInitialized) {
       return;
     }
+    if (trigger != null) _record(trigger);
+    _autoShutter.markShot();
+    final ratio = ref.read(viewfinderAspectProvider).ratio;
     setState(() {
       _capturing = true;
       _flash = true;
@@ -384,7 +478,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       final photo = await controller.takePicture();
       final result = await ref
           .read(captureServiceProvider)
-          .saveToGallery(photo.path);
+          .saveToGallery(await PhotoCropper.crop(photo.path, ratio));
       if (result == SaveResult.saved && mounted) {
         setState(() => _lastPhotoPath = photo.path);
       }
@@ -401,7 +495,8 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
             SaveResult.permissionDenied => '사진 저장 권한을 허용해 주세요',
             SaveResult.failed => '사진을 저장하지 못했어요',
           }),
-          action: result == SaveResult.saved
+          // 잠금 중에는 갤러리로 빠져나가지 않게 한다
+          action: result == SaveResult.saved && !ref.read(guideLockProvider)
               ? SnackBarAction(label: '보기', onPressed: _openGallery)
               : null,
           duration: const Duration(seconds: 3),
@@ -411,115 +506,265 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       messenger.showSnackBar(SnackBar(content: Text('촬영에 실패했어요 (${e.code})')));
     } finally {
       if (mounted) setState(() => _capturing = false);
+      _syncShutterTriggers();
       await _syncPoseStream();
     }
   }
 
+  void _setLocked(bool locked) {
+    final notifier = ref.read(guideLockProvider.notifier);
+    locked ? notifier.lock() : notifier.unlock();
+    // 잠금 중에는 시스템 제스처 바도 숨겨 실수로 앱을 나가지 않게 한다
+    unawaited(
+      SystemChrome.setEnabledSystemUIMode(
+        ref.read(guideLockProvider)
+            ? SystemUiMode.immersiveSticky
+            : SystemUiMode.edgeToEdge,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final preset = ref.watch(selectedPresetProvider);
-    final opacity = ref.watch(overlayOpacityProvider);
-    final cameras = ref.watch(availableCamerasProvider).value ?? const [];
-    final hasBothLenses =
-        cameras.any((c) => c.lensDirection == CameraLensDirection.back) &&
-        cameras.any((c) => c.lensDirection == CameraLensDirection.front);
-    final controller = _controller;
+    final preset = ref.watch(activePresetProvider);
+    final locked = ref.watch(guideLockProvider);
+    final aspect = ref.watch(viewfinderAspectProvider);
     final backdrop = ref.watch(cameraBackdropProvider);
-    _screenSize = MediaQuery.sizeOf(context);
-    ref.listen(selectedPresetProvider, (_, _) => unawaited(_syncPoseStream()));
+    final controller = _controller;
+    final hasPreview = controller != null || backdrop != null;
+    ref
+      ..listen(activePresetProvider, (_, _) => unawaited(_syncPoseStream()))
+      ..listen(shootSignalProvider, (_, _) => _syncShutterTriggers())
+      ..listen(autoShutterProvider, (_, _) => _syncShutterTriggers());
 
-    return Scaffold(
-      backgroundColor: AppTheme.ink,
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child:
-                backdrop ??
-                (controller != null
-                    ? GestureDetector(
-                        // 두 손가락 핀치 줌
-                        behavior: HitTestBehavior.opaque,
-                        onScaleStart: (_) => _pinchStartZoom = _zoom,
-                        onScaleUpdate: (d) {
-                          if (d.pointerCount >= 2) {
-                            _setZoom(_pinchStartZoom * d.scale);
-                          }
-                        },
-                        child: CameraPreviewFullscreen(controller: controller),
-                      )
-                    : _CameraFallback(issue: _issue, onRetry: _startCamera)),
-          ),
-          if (preset != null) ...[
-            Positioned.fill(
-              child: IgnorePointer(
-                child: CustomPaint(
-                  painter: FrameGuidePainter(aspectRatio: preset.aspectRatio),
-                ),
+    final padding = MediaQuery.viewPaddingOf(context);
+    final finder = aspect.layout(
+      MediaQuery.sizeOf(context),
+      safeTop: padding.top,
+      top: padding.top + _topBarHeight,
+      bottom: padding.bottom + _bottomPanelHeight,
+    );
+    _finderSize = finder.size;
+
+    return PopScope(
+      // 잠금 중 뒤로 가기로 앱이 닫히지 않게 한다
+      canPop: !locked,
+      child: Scaffold(
+        backgroundColor: AppTheme.ink,
+        body: Stack(
+          children: [
+            Positioned.fromRect(
+              rect: finder,
+              child: _Viewfinder(
+                preview:
+                    backdrop ??
+                    (controller != null
+                        ? GestureDetector(
+                            // 두 손가락 핀치 줌 (잠금 중에는 버튼으로만)
+                            behavior: HitTestBehavior.opaque,
+                            onScaleStart: (_) => _pinchStartZoom = _zoom,
+                            onScaleUpdate: (d) {
+                              if (!locked && d.pointerCount >= 2) {
+                                _setZoom(_pinchStartZoom * d.scale);
+                              }
+                            },
+                            child: CameraPreviewFullscreen(
+                              controller: controller,
+                            ),
+                          )
+                        : _CameraFallback(
+                            issue: _issue,
+                            onRetry: _startCamera,
+                          )),
+                preset: preset,
+                focal: _focalLength,
+                flash: _flash,
               ),
             ),
-            Positioned.fill(
-              child: _ReferenceOverlayLayer(
-                preset: preset,
-                opacity: opacity,
-                focal: _focalLength,
+            SafeArea(
+              child: Column(
+                children: [
+                  if (locked)
+                    const _LockedHint()
+                  else ...[
+                    _SettingsBar(onLock: () => _setLocked(true)),
+                    if (preset != null) _GuidePanelLayer(preset: preset),
+                  ],
+                  const Spacer(),
+                  _CoachLayer(preset: preset),
+                  const SizedBox(height: 12),
+                  if (hasPreview)
+                    ZoomSelector(
+                      // 스크린샷 모드는 일반 휴대폰과 같은 0.5~3배 표시
+                      range: backdrop != null
+                          ? const ZoomRange(0.5, 3)
+                          : _zoomRange,
+                      zoom: _zoom,
+                      onSelected: _setZoom,
+                      maxStop: locked ? 2 : ZoomRange.appMax,
+                    ),
+                  const SizedBox(height: 14),
+                  _BottomControls(
+                    locked: locked,
+                    onUnlock: () => _setLocked(false),
+                    lastPhotoPath: _lastPhotoPath,
+                    onGalleryTap: _openGallery,
+                    preset: preset,
+                    capturing: _capturing,
+                    counting: _autoShutter.counting,
+                    countDuration: _autoShutter.hold,
+                    onPresetTap: _openPresets,
+                    onShutter: backdrop != null
+                        ? () {}
+                        : controller == null || _switching
+                        ? null
+                        : _capture,
+                    onSwitchLens: _hasBothLenses && !_capturing && !_switching
+                        ? _switchLens
+                        : null,
+                  ),
+                ],
               ),
             ),
           ],
-          Center(child: _AngleIndicatorLayer(focal: _focalLength)),
-          const Align(
-            alignment: Alignment(0, -0.2),
-            child: _PerfectBannerLayer(),
-          ),
-          Positioned.fill(
-            child: IgnorePointer(
-              child: AnimatedOpacity(
-                duration: const Duration(milliseconds: 120),
-                opacity: _flash ? 0.7 : 0,
-                child: const ColoredBox(color: AppTheme.white),
+        ),
+      ),
+    );
+  }
+
+  /// 뷰파인더 배치에 쓰는 위·아래 컨트롤 높이
+  static const _topBarHeight = 60.0;
+  static const _bottomPanelHeight = 218.0;
+
+  bool get _hasBothLenses {
+    final cameras = ref.watch(availableCamerasProvider).value ?? const [];
+    bool has(CameraLensDirection d) => cameras.any((c) => c.lensDirection == d);
+    return has(CameraLensDirection.back) && has(CameraLensDirection.front);
+  }
+}
+
+/// 뷰파인더: 프리뷰 + 격자·프레임 + 가이드 + 기울기 인디케이터.
+/// 좌표는 모두 이 위젯 크기 기준이라 화면 비율이 바뀌면 함께 다시 계산된다.
+class _Viewfinder extends StatelessWidget {
+  const _Viewfinder({
+    required this.preview,
+    required this.preset,
+    required this.focal,
+    required this.flash,
+  });
+
+  final Widget preview;
+  final Preset? preset;
+  final double focal;
+  final bool flash;
+
+  @override
+  Widget build(BuildContext context) {
+    final preset = this.preset;
+    return ClipRect(
+      child: LayoutBuilder(
+        builder: (context, constraints) => Stack(
+          children: [
+            Positioned.fill(child: preview),
+            if (preset != null) ...[
+              Positioned.fill(child: _GridLayer(template: preset.template)),
+              Positioned.fill(
+                child: _GhostLayer(preset: preset, focal: focal),
+              ),
+              Positioned.fill(
+                child: _DynamicFrameLayer(
+                  fallback: SubjectTarget.of(preset, constraints.biggest),
+                ),
+              ),
+            ],
+            Center(child: _AngleIndicatorLayer(focal: focal)),
+            Positioned.fill(
+              child: IgnorePointer(
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 120),
+                  opacity: flash ? 0.7 : 0,
+                  child: const ColoredBox(color: AppTheme.white),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 잠금 중 안내: 촬영자가 할 일만 짧게.
+class _LockedHint extends StatelessWidget {
+  const _LockedHint();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    margin: const EdgeInsets.only(top: 10),
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+    decoration: BoxDecoration(
+      color: AppTheme.scrim,
+      borderRadius: BorderRadius.circular(20),
+    ),
+    child: const Text('아래 안내대로 움직이고, 초록불에 찍으세요'),
+  );
+}
+
+/// 설정 줄: 화면 비율 · 좌우 반전 · 자동 촬영 · 가이드 잠금
+class _SettingsBar extends ConsumerWidget {
+  const _SettingsBar({required this.onLock});
+
+  final VoidCallback onLock;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final hasPreset = ref.watch(selectedPresetProvider) != null;
+    final mirrored = ref.watch(guideMirrorProvider);
+    final auto = ref.watch(autoShutterProvider);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 2, 12, 0),
+      child: Row(
+        children: [
+          // 큰 글자에서도 넘치지 않게 줄여서 표시
+          Expanded(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Row(
+                children: [
+                  _SettingChip(
+                    label: ref.watch(viewfinderAspectProvider).label,
+                    semantics: '화면 비율',
+                    icon: Icons.aspect_ratio,
+                    onTap: ref.read(viewfinderAspectProvider.notifier).cycle,
+                  ),
+                  const SizedBox(width: 8),
+                  _SettingChip(
+                    label: '반전',
+                    semantics: '가이드 좌우 반전',
+                    icon: Icons.flip,
+                    active: mirrored,
+                    onTap: hasPreset
+                        ? ref.read(guideMirrorProvider.notifier).toggle
+                        : null,
+                  ),
+                  const SizedBox(width: 8),
+                  _SettingChip(
+                    label: '자동',
+                    semantics: '자동 촬영',
+                    icon: Icons.timer_outlined,
+                    active: auto,
+                    onTap: ref.read(autoShutterProvider.notifier).toggle,
+                  ),
+                ],
               ),
             ),
           ),
-          SafeArea(
-            child: Column(
-              children: [
-                if (preset != null)
-                  _TopPanel(
-                    preset: preset,
-                    opacity: opacity,
-                    onOpacityChanged: ref
-                        .read(overlayOpacityProvider.notifier)
-                        .set,
-                  ),
-                const Spacer(),
-                _GuideStatusLayer(hasPreset: preset != null),
-                const SizedBox(height: 12),
-                if (controller != null || backdrop != null)
-                  ZoomSelector(
-                    // 스크린샷 모드는 일반 휴대폰과 같은 0.5~3배 표시
-                    range: backdrop != null
-                        ? const ZoomRange(0.5, 3)
-                        : _zoomRange,
-                    zoom: _zoom,
-                    onSelected: _setZoom,
-                  ),
-                const SizedBox(height: 14),
-                _BottomControls(
-                  lastPhotoPath: _lastPhotoPath,
-                  onGalleryTap: _openGallery,
-                  preset: preset,
-                  capturing: _capturing,
-                  onPresetTap: () => showPresetBottomSheet(context),
-                  onShutter: backdrop != null
-                      ? () {}
-                      : controller == null || _switching
-                      ? null
-                      : _capture,
-                  onSwitchLens: hasBothLenses && !_capturing && !_switching
-                      ? _switchLens
-                      : null,
-                ),
-              ],
-            ),
+          const SizedBox(width: 8),
+          LockButton(
+            locked: false,
+            onLock: hasPreset ? onLock : null,
+            onUnlock: () {},
           ),
         ],
       ),
@@ -527,7 +772,97 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   }
 }
 
-/// 자세계는 센서 주기로 다시 그려지므로 카메라 화면 전체와 분리.
+class _SettingChip extends StatelessWidget {
+  const _SettingChip({
+    required this.label,
+    required this.semantics,
+    required this.icon,
+    required this.onTap,
+    this.active = false,
+  });
+
+  final String label;
+  final String semantics;
+  final IconData icon;
+  final bool active;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = active ? AppTheme.ink : AppTheme.white;
+    return Semantics(
+      button: true,
+      toggled: active,
+      label: semantics,
+      value: label,
+      onTap: onTap,
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Opacity(
+          opacity: onTap == null ? 0.4 : 1,
+          child: Container(
+            height: 40,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: active ? AppTheme.coral : AppTheme.scrim,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 18, color: color),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: TextStyle(color: color, fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 3분할 격자 + 프레임 모서리 + 보조선(테이블·지평선·다리). 촬영 순간에는 사라진다.
+class _GridLayer extends ConsumerWidget {
+  const _GridLayer({required this.template});
+
+  final SilhouetteTemplate? template;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ready = ref.watch(
+      shootSignalProvider.select((s) => s == ShootSignal.ready),
+    );
+    return IgnorePointer(
+      child: AnimatedOpacity(
+        opacity: ready ? 0 : 1,
+        duration: const Duration(milliseconds: 250),
+        child: LayoutBuilder(
+          builder: (context, c) => CustomPaint(
+            size: Size.infinite,
+            painter: FrameGuidePainter(aspectRatio: c.biggest.aspectRatio),
+            foregroundPainter: switch (template) {
+              final t? => TemplatePainter(
+                template: t,
+                color: AppTheme.whiteMuted,
+                strokeWidth: 1.4,
+                showFigure: false,
+              ),
+              null => null,
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 자세계는 센서 주기로 다시 그려지므로 분리. 폰 각도가 문제일 때만 보인다.
 class _AngleIndicatorLayer extends ConsumerWidget {
   const _AngleIndicatorLayer({required this.focal});
 
@@ -536,150 +871,207 @@ class _AngleIndicatorLayer extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final guide = ref.watch(angleGuideProvider);
-    return guide == null
-        ? const SizedBox.shrink()
-        : AngleIndicator(guide: guide, focal: focal);
-  }
-}
-
-/// 하단 안내 문구 (각도 + 구도). 센서·포즈 주기로 갱신되므로 분리.
-class _GuideStatusLayer extends ConsumerWidget {
-  const _GuideStatusLayer({required this.hasPreset});
-
-  final bool hasPreset;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return GuideStatus(
-      angle: ref.watch(angleGuideProvider),
-      pose: ref.watch(poseMatchProvider),
-      hasPreset: hasPreset,
+    if (guide == null) return const SizedBox.shrink();
+    // 사람을 맞추는 중에는 방해하지 않는다
+    final busy = ref.watch(
+      subjectProvider.select((s) => (s?.hasPerson ?? false) && !s!.fits),
+    );
+    return AnimatedOpacity(
+      opacity: guide.state == AngleState.off && !busy ? 1 : 0,
+      duration: const Duration(milliseconds: 200),
+      child: AngleIndicator(guide: guide, focal: focal),
     );
   }
 }
 
-class _PerfectBannerLayer extends ConsumerWidget {
-  const _PerfectBannerLayer();
+/// 하단 코칭 문구. 센서·포즈 주기로 갱신되므로 분리.
+class _CoachLayer extends ConsumerWidget {
+  const _CoachLayer({required this.preset});
+
+  final Preset? preset;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final perfect = ref.watch(
-      poseMatchProvider.select((s) => s?.perfect ?? false),
+    final preset = this.preset;
+    return CoachPill(
+      message: CoachMessage.of(
+        angle: ref.watch(angleGuideProvider),
+        fit: preset == null
+            ? null
+            : ref.watch(subjectProvider)?.fit ?? SubjectFit.none,
+        ready: ref.watch(shootSignalProvider) == ShootSignal.ready,
+      ),
     );
-    return PerfectMatchBanner(visible: perfect);
   }
 }
 
-class _ReferenceOverlayLayer extends ConsumerWidget {
-  const _ReferenceOverlayLayer({
-    required this.preset,
-    required this.opacity,
-    required this.focal,
-  });
+class _GhostLayer extends ConsumerWidget {
+  const _GhostLayer({required this.preset, required this.focal});
 
   final Preset preset;
-  final double opacity;
   final double focal;
 
   @override
+  Widget build(BuildContext context, WidgetRef ref) => ReferenceOverlay(
+    preset: preset,
+    opacity: ref.watch(overlayOpacityProvider),
+    visible: ref.watch(ghostVisibleProvider),
+    motion: ref.watch(guideMotionProvider),
+    focal: focal,
+  );
+}
+
+class _DynamicFrameLayer extends ConsumerWidget {
+  const _DynamicFrameLayer({required this.fallback});
+
+  /// 아직 인물 프레임이 없을 때 목표 자리만 그린다.
+  final SubjectTarget? fallback;
+
+  @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final match = ref.watch(poseMatchProvider);
-    return ReferenceOverlay(
-      preset: preset,
-      opacity: opacity,
-      match: match?.result,
-      live: match?.live,
-      perfect: match?.perfect ?? false,
-      motion: ref.watch(guideMotionProvider),
-      focal: focal,
+    final state = ref.watch(subjectProvider);
+    final target = fallback;
+    return DynamicFrame(
+      // 뷰파인더 비율이 방금 바뀌었으면 새 목표로
+      state: state != null && state.target.finder == target?.finder
+          ? state
+          : target == null
+          ? null
+          : SubjectState(target: target, fit: SubjectFit.none),
+      ready: ref.watch(shootSignalProvider) == ShootSignal.ready,
     );
   }
 }
 
-class _TopPanel extends StatelessWidget {
-  const _TopPanel({
-    required this.preset,
-    required this.opacity,
-    required this.onOpacityChanged,
-  });
+/// 사람이 잡히면 머리 자리를 가리지 않도록 패널을 접는다.
+class _GuidePanelLayer extends ConsumerWidget {
+  const _GuidePanelLayer({required this.preset});
 
   final Preset preset;
-  final double opacity;
-  final ValueChanged<double> onOpacityChanged;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final visible = ref.watch(ghostVisibleProvider);
+    return IgnorePointer(
+      ignoring: !visible,
+      child: AnimatedOpacity(
+        opacity: visible ? 1 : 0,
+        duration: const Duration(milliseconds: 300),
+        child: _GuidePanel(preset: preset),
+      ),
+    );
+  }
+}
+
+/// 투명도 + 촬영 팁 + (사진 프리셋) 레퍼런스 미리보기
+class _GuidePanel extends ConsumerWidget {
+  const _GuidePanel({required this.preset});
+
+  final Preset preset;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+      padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
             child: Column(
               children: [
-                OpacitySlider(value: opacity, onChanged: onOpacityChanged),
+                OpacitySlider(
+                  value: ref.watch(overlayOpacityProvider),
+                  onChanged: ref.read(overlayOpacityProvider.notifier).set,
+                ),
                 const SizedBox(height: 8),
                 GuideCard(preset: preset),
               ],
             ),
           ),
-          const SizedBox(width: 10),
-          ReferencePip(preset: preset),
+          if (!preset.isTemplate) ...[
+            const SizedBox(width: 10),
+            ReferencePip(preset: preset),
+          ],
         ],
       ),
     );
   }
 }
 
-class _BottomControls extends StatelessWidget {
+class _BottomControls extends ConsumerWidget {
   const _BottomControls({
+    required this.locked,
+    required this.onUnlock,
     required this.lastPhotoPath,
     required this.onGalleryTap,
     required this.preset,
     required this.capturing,
+    required this.counting,
+    required this.countDuration,
     required this.onPresetTap,
     required this.onShutter,
     required this.onSwitchLens,
   });
 
+  final bool locked;
+  final VoidCallback onUnlock;
   final String? lastPhotoPath;
   final VoidCallback onGalleryTap;
   final Preset? preset;
   final bool capturing;
+  final ValueListenable<bool> counting;
+  final Duration countDuration;
   final VoidCallback onPresetTap;
   final VoidCallback? onShutter;
   final VoidCallback? onSwitchLens;
 
   @override
-  Widget build(BuildContext context) {
-    // 셔터는 항상 가운데: 왼쪽(갤러리·프리셋)과 오른쪽(렌즈)을 같은 폭으로
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ready = ref.watch(shootSignalProvider) == ShootSignal.ready;
+    // 셔터는 항상 가운데: 왼쪽과 오른쪽을 같은 폭으로
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
-      child: Row(
-        children: [
-          Expanded(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                GalleryButton(
-                  lastPhotoPath: lastPhotoPath,
-                  onTap: onGalleryTap,
-                ),
-                _PresetThumbButton(preset: preset, onTap: onPresetTap),
-              ],
+      child: SizedBox(
+        height: 88,
+        child: Row(
+          children: [
+            Expanded(
+              child: locked
+                  ? const SizedBox.shrink()
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        GalleryButton(
+                          lastPhotoPath: lastPhotoPath,
+                          onTap: onGalleryTap,
+                        ),
+                        _PresetThumbButton(preset: preset, onTap: onPresetTap),
+                      ],
+                    ),
             ),
-          ),
-          ShutterButton(onPressed: onShutter, busy: capturing),
-          Expanded(
-            child: Center(
-              child: _RoundIconButton(
-                icon: Icons.cameraswitch_outlined,
-                tooltip: '렌즈 전환',
-                onPressed: onSwitchLens,
+            ValueListenableBuilder(
+              valueListenable: counting,
+              builder: (_, counting, _) => ShutterButton(
+                onPressed: onShutter,
+                busy: capturing,
+                ready: ready,
+                counting: counting,
+                countDuration: countDuration,
               ),
             ),
-          ),
-        ],
+            Expanded(
+              child: Center(
+                child: locked
+                    ? LockButton(locked: true, onLock: null, onUnlock: onUnlock)
+                    : _RoundIconButton(
+                        icon: Icons.cameraswitch_outlined,
+                        tooltip: '렌즈 전환',
+                        onPressed: onSwitchLens,
+                      ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
