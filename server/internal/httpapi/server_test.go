@@ -103,7 +103,7 @@ func TestEventsCountedWithPresetFunnel(t *testing.T) {
 		{"name":"perfect_match","count":1,"preset":"`+id+`"},
 		{"name":"photo_saved","count":1,"preset":"unknown-preset"},
 		{"name":"app_open","count":1},
-		{"name":"guide_locked","count":2,"preset":"tpl-cafe"},
+		{"name":"guide_locked","count":2,"preset":"cmp-cafe"},
 		{"name":"hacked","count":1},
 		{"name":"app_open","count":9999}
 	]}`)
@@ -118,7 +118,7 @@ func TestEventsCountedWithPresetFunnel(t *testing.T) {
 		`likezzix_preset_events_total{event="perfect_match",preset="` + id + `"} 1`,
 		`likezzix_app_events_total{event="photo_saved",platform="android"} 1`,
 		// 앱에 내장된 실루엣 템플릿도 프리셋별로 집계
-		`likezzix_preset_events_total{event="guide_locked",preset="tpl-cafe"} 2`,
+		`likezzix_preset_events_total{event="guide_locked",preset="cmp-cafe"} 2`,
 		`likezzix_app_events_rejected_total{reason="unknown_event"} 1`,
 		`likezzix_app_events_rejected_total{reason="invalid_count"} 1`,
 		`likezzix_app_requests_total{app_version="1.0.0",platform="android"} 1`,
