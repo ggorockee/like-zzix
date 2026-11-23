@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/app_theme.dart';
+import '../models/guide_motion.dart';
 import '../models/preset.dart';
 import '../providers/camera_providers.dart';
 import '../providers/preset_providers.dart';
@@ -14,6 +15,7 @@ import '../models/preview_transform.dart';
 import '../models/zoom_range.dart';
 import '../providers/api_providers.dart';
 import '../providers/attitude_providers.dart';
+import '../providers/guide_motion_provider.dart';
 import '../providers/pose_providers.dart';
 import '../services/pose_service.dart';
 import '../services/telemetry_service.dart';
@@ -158,7 +160,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     _streaming = false;
     setState(() {
       _controller = controller;
-      _lens = description.lensDirection;
+      _setLens(description.lensDirection);
       _issue = _CameraIssue.none;
       _zoomRange = zoomRange;
       _zoom = zoomRange.clamp(1);
@@ -166,6 +168,11 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     await old?.dispose();
     await _applyZoom(controller);
     await _syncPoseStream();
+  }
+
+  void _setLens(CameraLensDirection lens) {
+    _lens = lens;
+    if (mounted) ref.read(activeLensProvider.notifier).set(lens);
   }
 
   // ---------------------------------------------------------------------------
@@ -267,11 +274,15 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
         _screenSize.isEmpty) {
       return;
     }
+    final frameRect = SilhouettePainter.frameRect(
+      _screenSize,
+      preset.aspectRatio,
+    );
     final transform = PreviewTransform(
       screen: _screenSize,
       // previewSize는 센서 기준(가로)이므로 세로 화면 비율은 높이/너비
       previewAspect: previewSize.height / previewSize.width,
-      frame: SilhouettePainter.frameRect(_screenSize, preset.aspectRatio),
+      frame: frameRect,
     );
     final live = frame.landmarks == null
         ? null
@@ -282,7 +293,35 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                 return PoseLandmark(f.dx, f.dy, l.likelihood);
               }(),
           ];
-    ref.read(poseMatchProvider.notifier).update(live);
+    // 화면에 보이는 가이드와 같은 위치를 기준으로 판정한다.
+    final motion = ref.read(guideMotionProvider);
+    ref
+        .read(poseMatchProvider.notifier)
+        .update(
+          live,
+          reference: motion.locked
+              ? null
+              : motion.displace(
+                  preset.landmarks,
+                  screen: _screenSize,
+                  frame: frameRect,
+                  focal: _focalLength,
+                ),
+        );
+  }
+
+  /// 화면 단위 초점거리: 각도 1°가 화면에서 몇 px인지 정한다.
+  double get _focalLength {
+    final previewSize = _controller?.value.previewSize;
+    var height = _screenSize.height;
+    if (previewSize != null) {
+      height = PreviewTransform(
+        screen: _screenSize,
+        previewAspect: previewSize.height / previewSize.width,
+        frame: Rect.zero,
+      ).previewRect.height;
+    }
+    return GuideMotion.focalLength(height, _zoom);
   }
 
   /// 전면/후면 전환. 컨트롤러를 새로 만들지 않고 렌즈만 교체한다
@@ -303,7 +342,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     await _pauseStream();
     try {
       await controller.setDescription(description);
-      _lens = target;
+      _setLens(target);
       final range = await _readZoomRange(controller);
       if (mounted) {
         setState(() {
@@ -314,7 +353,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       await _applyZoom(controller);
     } on CameraException catch (e) {
       debugPrint('[Camera] 렌즈 교체 실패, 다시 열기: ${e.code}');
-      _lens = target;
+      _setLens(target);
       if (mounted) setState(() => _controller = null);
       await controller.dispose();
       await _startCamera();
@@ -419,10 +458,14 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
               ),
             ),
             Positioned.fill(
-              child: _ReferenceOverlayLayer(preset: preset, opacity: opacity),
+              child: _ReferenceOverlayLayer(
+                preset: preset,
+                opacity: opacity,
+                focal: _focalLength,
+              ),
             ),
           ],
-          const Center(child: _AngleIndicatorLayer()),
+          Center(child: _AngleIndicatorLayer(focal: _focalLength)),
           const Align(
             alignment: Alignment(0, -0.2),
             child: _PerfectBannerLayer(),
@@ -486,14 +529,16 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
 
 /// 자세계는 센서 주기로 다시 그려지므로 카메라 화면 전체와 분리.
 class _AngleIndicatorLayer extends ConsumerWidget {
-  const _AngleIndicatorLayer();
+  const _AngleIndicatorLayer({required this.focal});
+
+  final double focal;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final guide = ref.watch(angleGuideProvider);
     return guide == null
         ? const SizedBox.shrink()
-        : AngleIndicator(guide: guide);
+        : AngleIndicator(guide: guide, focal: focal);
   }
 }
 
@@ -526,10 +571,15 @@ class _PerfectBannerLayer extends ConsumerWidget {
 }
 
 class _ReferenceOverlayLayer extends ConsumerWidget {
-  const _ReferenceOverlayLayer({required this.preset, required this.opacity});
+  const _ReferenceOverlayLayer({
+    required this.preset,
+    required this.opacity,
+    required this.focal,
+  });
 
   final Preset preset;
   final double opacity;
+  final double focal;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -540,6 +590,8 @@ class _ReferenceOverlayLayer extends ConsumerWidget {
       match: match?.result,
       live: match?.live,
       perfect: match?.perfect ?? false,
+      motion: ref.watch(guideMotionProvider),
+      focal: focal,
     );
   }
 }

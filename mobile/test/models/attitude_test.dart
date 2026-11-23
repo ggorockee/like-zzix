@@ -36,13 +36,96 @@ void main() {
     });
   });
 
-  test('GravityFilter: 튀는 값 하나는 크게 반영되지 않음', () {
-    final filter = GravityFilter();
-    for (var i = 0; i < 50; i++) {
-      filter.add(0, g, 0);
-    }
-    final a = filter.add(0, 0, g); // 순간 충격
-    expect(a.pitchDeg, lessThan(15));
+  group('AttitudeFilter', () {
+    final start = DateTime(2026, 11, 23);
+    DateTime at(int i) => start.add(Duration(milliseconds: 20 * i));
+    const deg = math.pi / 180;
+
+    test('튀는 값 하나는 크게 반영되지 않음', () {
+      final filter = AttitudeFilter();
+      for (var i = 0; i < 50; i++) {
+        filter.addAccelerometer(0, g, 0, at(i));
+      }
+      final a = filter.addAccelerometer(0, 0, g, at(50)); // 순간 충격
+      expect(a.pitchDeg, lessThan(15));
+    });
+
+    test('자이로가 없어도 1.5초 안에 실제 각도로 수렴', () {
+      final filter = AttitudeFilter()..addAccelerometer(0, g, 0, at(0));
+      late Attitude a;
+      for (var i = 1; i <= 75; i++) {
+        a = filter.addAccelerometer(
+          0,
+          g * math.cos(20 * deg),
+          -g * math.sin(20 * deg),
+          at(i),
+        );
+      }
+      expect(a.pitchDeg, closeTo(-20, 1));
+    });
+
+    test('빠르게 기울이면 자이로 덕분에 지연 없이 따라감', () {
+      // 0.2초 동안 카메라를 20° 위로 (윗변이 몸 쪽으로 = x축 +회전)
+      final filter = AttitudeFilter()
+        ..addAccelerometer(0, g, 0, at(0))
+        ..addGyroscope(0, 0, 0, at(0));
+      late Attitude a;
+      for (var i = 1; i <= 10; i++) {
+        filter.addGyroscope(100 * deg, 0, 0, at(i));
+        final p = 2.0 * i * deg;
+        a = filter.addAccelerometer(
+          0,
+          g * math.cos(p),
+          -g * math.sin(p),
+          at(i),
+        );
+      }
+      expect(a.pitchDeg, closeTo(-20, 1));
+    });
+
+    test('반시계로 돌리면 roll +', () {
+      final filter = AttitudeFilter()
+        ..addAccelerometer(0, g, 0, at(0))
+        ..addGyroscope(0, 0, 0, at(0));
+      late Attitude a;
+      for (var i = 1; i <= 5; i++) {
+        filter.addGyroscope(0, 0, 100 * deg, at(i));
+        final r = 2.0 * i * deg;
+        a = filter.addAccelerometer(g * math.sin(r), g * math.cos(r), 0, at(i));
+      }
+      expect(a.rollDeg, closeTo(10, 1));
+    });
+
+    test('왼쪽으로 돌리면 yaw +, 멈추면 0으로 돌아옴', () {
+      final filter = AttitudeFilter()
+        ..addAccelerometer(0, g, 0, at(0))
+        ..addGyroscope(0, 0, 0, at(0));
+      for (var i = 1; i <= 10; i++) {
+        filter.addGyroscope(0, 100 * deg, 0, at(i));
+      }
+      final turned = filter.addAccelerometer(0, g, 0, at(10));
+      expect(turned.yawDeg, inInclusiveRange(16, 20));
+      for (var i = 11; i <= 210; i++) {
+        filter.addGyroscope(0, 0, 0, at(i));
+      }
+      expect(filter.addAccelerometer(0, g, 0, at(210)).yawDeg, lessThan(0.5));
+    });
+
+    test('오래 멈췄다 재개돼도 튀지 않음', () {
+      final filter = AttitudeFilter()
+        ..addAccelerometer(0, g, 0, at(0))
+        ..addGyroscope(0, 0, 0, at(0))
+        ..addGyroscope(0, 1, 0, at(500));
+      expect(
+        filter.addAccelerometer(0, g, 0, at(500)).yawDeg,
+        lessThanOrEqualTo(6),
+      );
+    });
+  });
+
+  test('전면 카메라는 상하·좌우 회전이 뒤집히고 수평은 그대로', () {
+    final a = const Attitude(10, 5, yawDeg: 3).forFrontCamera;
+    expect((a.pitchDeg, a.rollDeg, a.yawDeg), (-10, 5, -3));
   });
 
   group('AngleMatcher', () {

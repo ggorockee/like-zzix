@@ -6,7 +6,7 @@ import '../models/pose_match.dart';
 import '../models/preset.dart';
 import '../services/telemetry_service.dart';
 import 'api_providers.dart';
-import 'attitude_providers.dart';
+import 'guide_motion_provider.dart';
 import 'preset_providers.dart';
 
 /// 실시간 구도 판정 상태.
@@ -51,18 +51,20 @@ class PoseMatchNotifier extends Notifier<PoseMatchState?> {
   }
 
   /// 카메라 화면이 프레임마다 호출. [live]는 프레임 정규화 좌표.
-  void update(List<PoseLandmark>? live) {
+  /// [reference]는 화면에 보이는(각도 차이만큼 움직인) 레퍼런스 관절. 없으면 프레임에 고정된 원래 위치.
+  void update(List<PoseLandmark>? live, {List<PoseLandmark>? reference}) {
     final preset = ref.read(selectedPresetProvider);
     if (preset == null) {
       state = null;
       return;
     }
     final result = _matcher.evaluate(
-      preset.landmarks,
+      reference ?? preset.landmarks,
       live,
       aspectRatio: preset.aspectRatio,
     );
-    final angleOk = ref.read(angleGuideProvider)?.matched ?? false;
+    // 각도가 맞아 가이드가 프레임에 붙은 상태에서만 최종 구도로 인정한다.
+    final angleOk = ref.read(guideMotionProvider).locked;
     final now = ref.read(poseClockProvider)();
     final wasPerfect = state?.perfect ?? false;
 

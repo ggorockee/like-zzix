@@ -4,21 +4,26 @@ import 'package:flutter/material.dart';
 
 import '../core/app_theme.dart';
 import '../models/attitude.dart';
+import '../models/guide_motion.dart';
 
 /// 화면 중앙 자세계: 고정된 목표 표시(원)와, 현재 기울기에 따라
 /// 회전(roll)·상하 이동(pitch)하는 수평 막대. 막대가 원에 겹치면 일치.
 class AngleIndicator extends StatelessWidget {
-  const AngleIndicator({super.key, required this.guide});
+  const AngleIndicator({super.key, required this.guide, required this.focal});
 
   final AngleGuide guide;
 
-  static const _pixelsPerDegree = 6.0;
+  /// 화면 단위 초점거리. 막대를 레퍼런스 가이드와 같은 속도로 움직인다.
+  final double focal;
 
   @override
   Widget build(BuildContext context) {
     final color = guide.matched ? AppTheme.mint : AppTheme.white;
     // 카메라가 목표보다 아래를 보면(+) 막대가 위로 → 폰을 위로 향하면 내려와 겹침
-    final dy = (-guide.pitchDelta * _pixelsPerDegree).clamp(-140.0, 140.0);
+    const limit = GuideMotion.maxTiltDeg;
+    final dy =
+        -focal *
+        math.tan(guide.pitchDelta.clamp(-limit, limit) * math.pi / 180);
     return IgnorePointer(
       child: SizedBox(
         width: 220,

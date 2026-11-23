@@ -113,6 +113,18 @@ void main() {
     expect(c.read(poseMatchProvider)!.perfect, isFalse);
   });
 
+  test('움직인 가이드에 사람이 맞아도 각도가 안 맞으면 Perfect 아님', () {
+    final c = container(angleOk: false);
+    final notifier = c.read(poseMatchProvider.notifier);
+    // 가이드와 사람이 함께 0.3만큼 밀린 상태: 위치 안내는 나오지 않아야 한다
+    notifier.update(_body(0.3), reference: _body(0.3));
+    now = now.add(const Duration(seconds: 1));
+    notifier.update(_body(0.3), reference: _body(0.3));
+    final state = c.read(poseMatchProvider)!;
+    expect(state.result.matched, isTrue);
+    expect(state.perfect, isFalse);
+  });
+
   test('프리셋을 바꾸면 판정 초기화', () {
     final c = container(angleOk: true);
     c.read(poseMatchProvider.notifier).update(_body());

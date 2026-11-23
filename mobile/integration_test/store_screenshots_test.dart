@@ -8,9 +8,11 @@ import 'package:go_router/go_router.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:likezzix/app.dart';
 import 'package:likezzix/models/attitude.dart';
+import 'package:likezzix/models/guide_motion.dart';
 import 'package:likezzix/models/preset.dart';
 import 'package:likezzix/providers/attitude_providers.dart';
 import 'package:likezzix/providers/camera_providers.dart';
+import 'package:likezzix/providers/guide_motion_provider.dart';
 import 'package:likezzix/providers/pose_providers.dart';
 import 'package:likezzix/providers/preset_providers.dart';
 import 'package:likezzix/screens/camera_screen.dart';
@@ -102,7 +104,18 @@ void main() {
     pitchOffset = 9;
     await select(cafe);
     // 사람은 구도에 맞았지만 폰 각도만 어긋난 상태
-    container.read(poseMatchProvider.notifier).update(cafe.landmarks);
+    final screen = tester.getSize(find.byType(CameraScreen));
+    final person = container
+        .read(guideMotionProvider)
+        .displace(
+          cafe.landmarks,
+          screen: screen,
+          frame: SilhouettePainter.frameRect(screen, cafe.aspectRatio),
+          focal: GuideMotion.focalLength(screen.height, 1),
+        );
+    container
+        .read(poseMatchProvider.notifier)
+        .update(person, reference: person);
     await _settle(tester);
     await binding.takeScreenshot('03_angle_guide');
   });
@@ -143,9 +156,24 @@ class _DemoBackdrop extends ConsumerWidget {
                 child: Image.asset(asset, fit: BoxFit.cover),
               ),
             ),
-            Positioned.fromRect(
-              rect: frame,
-              child: Image.asset(asset, fit: BoxFit.fill),
+            // 실제 카메라처럼 폰 각도에 따라 장면도 움직인다
+            Positioned.fill(
+              child: Transform(
+                transform: ref
+                    .watch(guideMotionProvider)
+                    .matrix(
+                      constraints.biggest,
+                      GuideMotion.focalLength(constraints.maxHeight, 1),
+                    ),
+                child: Stack(
+                  children: [
+                    Positioned.fromRect(
+                      rect: frame,
+                      child: Image.asset(asset, fit: BoxFit.fill),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ],
         );
