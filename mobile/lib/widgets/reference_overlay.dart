@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/app_theme.dart';
+import '../models/guide_motion.dart';
 import '../models/pose_match.dart';
 import '../models/preset.dart';
 import 'reference_image.dart';
@@ -9,6 +10,8 @@ import 'silhouette_painter.dart';
 /// 카메라 위에 겹치는 레퍼런스: 원본 사진(반투명) + 인물 외곽선 + 실시간 관절 점.
 ///
 /// 사진·외곽선·관절 모두 같은 프레임 영역([SilhouettePainter.frameRect]) 기준.
+/// 사진·외곽선은 목표 각도에서 벗어난 만큼([motion]) 움직이고, 각도가 맞으면 프레임에 붙는다.
+/// 실시간 관절은 실제 사람 위치이므로 움직이지 않는다.
 class ReferenceOverlay extends StatelessWidget {
   const ReferenceOverlay({
     super.key,
@@ -17,6 +20,8 @@ class ReferenceOverlay extends StatelessWidget {
     this.match,
     this.live,
     this.perfect = false,
+    this.motion = GuideMotion.still,
+    this.focal = 1,
   });
 
   final Preset preset;
@@ -24,6 +29,10 @@ class ReferenceOverlay extends StatelessWidget {
   final PoseMatchResult? match;
   final List<PoseLandmark>? live;
   final bool perfect;
+  final GuideMotion motion;
+
+  /// 화면 단위 초점거리 ([GuideMotion.focalLength])
+  final double focal;
 
   @override
   Widget build(BuildContext context) {
@@ -36,24 +45,36 @@ class ReferenceOverlay extends StatelessWidget {
           );
           return Stack(
             children: [
-              Positioned.fromRect(
-                rect: frame,
-                child: Opacity(
-                  opacity: opacity,
-                  child: ReferenceImage(
-                    preset: preset,
-                    fit: BoxFit.fill,
-                    showFallback: false,
-                  ),
-                ),
-              ),
               Positioned.fill(
-                child: CustomPaint(
-                  painter: SilhouettePainter(
-                    preset: preset,
-                    color: perfect ? AppTheme.mint : AppTheme.white,
-                    strokeWidth: perfect ? 4 : 3,
-                    fillOpacity: 0,
+                child: Transform(
+                  transform: motion.matrix(constraints.biggest, focal),
+                  // 움직이는 동안 사진·외곽선은 다시 그리지 않고 변환만 바꾼다
+                  child: RepaintBoundary(
+                    child: Stack(
+                      children: [
+                        Positioned.fromRect(
+                          rect: frame,
+                          child: Opacity(
+                            opacity: opacity,
+                            child: ReferenceImage(
+                              preset: preset,
+                              fit: BoxFit.fill,
+                              showFallback: false,
+                            ),
+                          ),
+                        ),
+                        Positioned.fill(
+                          child: CustomPaint(
+                            painter: SilhouettePainter(
+                              preset: preset,
+                              color: perfect ? AppTheme.mint : AppTheme.white,
+                              strokeWidth: perfect ? 4 : 3,
+                              fillOpacity: 0,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),

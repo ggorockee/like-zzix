@@ -9,6 +9,19 @@ final availableCamerasProvider = FutureProvider<List<CameraDescription>>(
   (ref) => availableCameras(),
 );
 
+/// 지금 쓰는 렌즈 (전면이면 각도 안내가 뒤집힌다). 카메라 화면이 갱신한다.
+final activeLensProvider =
+    NotifierProvider<ActiveLensNotifier, CameraLensDirection>(
+      ActiveLensNotifier.new,
+    );
+
+class ActiveLensNotifier extends Notifier<CameraLensDirection> {
+  @override
+  CameraLensDirection build() => CameraLensDirection.back;
+
+  void set(CameraLensDirection lens) => state = lens;
+}
+
 final captureServiceProvider = Provider<CaptureService>(
   (ref) => CaptureService(),
 );
