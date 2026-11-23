@@ -23,15 +23,15 @@ class DynamicFrame extends StatefulWidget {
     required this.state,
     required this.signal,
     this.template,
-    this.opacity = 1,
+    this.silhouetteOpacity = 0,
   });
 
   final CompositionState? state;
   final ShootSignal signal;
   final CompositionTemplate? template;
 
-  /// 구도선 투명도 (사용자 설정)
-  final double opacity;
+  /// 인물 실루엣 진하기 (사용자 설정, 0이면 숨김)
+  final double silhouetteOpacity;
 
   @override
   State<DynamicFrame> createState() => _DynamicFrameState();
@@ -76,7 +76,7 @@ class _DynamicFrameState extends State<DynamicFrame>
           targets: widget.state?.targets ?? const [],
           action: widget.state?.fit.action ?? CoachAction.findPerson,
           template: widget.template,
-          opacity: widget.opacity,
+          silhouetteOpacity: widget.silhouetteOpacity,
         ),
       ),
     ),
@@ -217,20 +217,28 @@ class _DynamicFramePainter extends CustomPainter {
     required this.targets,
     required this.action,
     required this.template,
-    required this.opacity,
+    required this.silhouetteOpacity,
   }) : super(repaint: visual);
 
   final ValueNotifier<FrameVisual> visual;
   final List<Target> targets;
   final CoachAction action;
   final CompositionTemplate? template;
-  final double opacity;
+  final double silhouetteOpacity;
 
   @override
   void paint(Canvas canvas, Size size) {
     final v = visual.value;
     final template = this.template;
     if (template != null) {
+      CompositionPainter.silhouette(
+        canvas,
+        size,
+        template,
+        targets,
+        color: Color.lerp(AppTheme.white, AppTheme.mint, v.ready)!,
+        opacity: silhouetteOpacity * v.fade,
+      );
       final base = Color.lerp(
         Color.lerp(AppTheme.white, AppTheme.amber, v.warn),
         AppTheme.mint,
@@ -241,7 +249,7 @@ class _DynamicFramePainter extends CustomPainter {
         canvas,
         size,
         template,
-        color: _tint(base, 0.8 * opacity * v.fade),
+        color: _tint(base, 0.72 * v.fade),
         gazeColor: _tint(
           Color.lerp(AppTheme.amber, AppTheme.mint, math.max(gaze, v.ready))!,
           v.fade,
@@ -493,6 +501,6 @@ class _DynamicFramePainter extends CustomPainter {
       old.targets != targets ||
       old.action != action ||
       old.template != template ||
-      old.opacity != opacity ||
+      old.silhouetteOpacity != silhouetteOpacity ||
       old.visual != visual;
 }

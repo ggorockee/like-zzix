@@ -185,7 +185,7 @@ class CompositionController extends Notifier<CompositionState?> {
 }
 
 /// 고스트(사진 프리셋의 반투명 사진)와 안내 패널을 잠깐 보여 줄지.
-/// 구도를 고르거나 반전·투명도를 바꾸면 [duration] 동안 켜진다.
+/// 구도를 고르거나 반전하면 [duration] 동안 켜진다.
 final ghostFlashProvider = NotifierProvider<GhostFlashNotifier, bool>(
   GhostFlashNotifier.new,
 );
@@ -195,9 +195,7 @@ class GhostFlashNotifier extends Notifier<bool> {
 
   @override
   bool build() {
-    ref
-      ..watch(overlayOpacityProvider)
-      ..watch(guideMirrorProvider);
+    ref.watch(guideMirrorProvider);
     if (ref.watch(selectedPresetProvider) == null) return false;
     final timer = Timer(duration, () => state = false);
     ref.onDispose(timer.cancel);

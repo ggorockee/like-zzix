@@ -985,7 +985,9 @@ class _DynamicFrameLayer extends ConsumerWidget {
         state.targets.first.center == targets.first.center;
     return DynamicFrame(
       template: preset.template,
-      opacity: preset.isTemplate ? ref.watch(overlayOpacityProvider) : 1,
+      silhouetteOpacity: preset.isTemplate
+          ? ref.watch(overlayOpacityProvider)
+          : 0,
       signal: ref.watch(shootSignalProvider) ?? ShootSignal.waiting,
       state: current
           ? state
@@ -994,7 +996,8 @@ class _DynamicFrameLayer extends ConsumerWidget {
   }
 }
 
-/// 사람이 잡히면 구도를 가리지 않도록 패널을 접는다.
+/// 실루엣 투명도 + 촬영 팁 + 예시 사진.
+/// 투명도는 항상 조절할 수 있고, 팁·예시는 사람이 잡히면 구도를 가리지 않도록 사라진다.
 class _GuidePanelLayer extends ConsumerWidget {
   const _GuidePanelLayer({required this.preset});
 
@@ -1002,26 +1005,15 @@ class _GuidePanelLayer extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final visible = ref.watch(ghostVisibleProvider);
-    return IgnorePointer(
-      ignoring: !visible,
+    final showTips = ref.watch(ghostVisibleProvider);
+    Widget fade(Widget child) => IgnorePointer(
+      ignoring: !showTips,
       child: AnimatedOpacity(
-        opacity: visible ? 1 : 0,
+        opacity: showTips ? 1 : 0,
         duration: const Duration(milliseconds: 300),
-        child: _GuidePanel(preset: preset),
+        child: child,
       ),
     );
-  }
-}
-
-/// 투명도 + 촬영 팁 + (사진 프리셋) 레퍼런스 미리보기
-class _GuidePanel extends ConsumerWidget {
-  const _GuidePanel({required this.preset});
-
-  final Preset preset;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
       child: Row(
@@ -1031,17 +1023,18 @@ class _GuidePanel extends ConsumerWidget {
             child: Column(
               children: [
                 OpacitySlider(
+                  label: preset.isTemplate ? '실루엣' : '사진',
                   value: ref.watch(overlayOpacityProvider),
                   onChanged: ref.read(overlayOpacityProvider.notifier).set,
                 ),
                 const SizedBox(height: 8),
-                GuideCard(preset: preset),
+                fade(GuideCard(preset: preset)),
               ],
             ),
           ),
           if (preset.hasPhoto) ...[
             const SizedBox(width: 10),
-            ReferencePip(preset: preset),
+            fade(ReferencePip(preset: preset)),
           ],
         ],
       ),
