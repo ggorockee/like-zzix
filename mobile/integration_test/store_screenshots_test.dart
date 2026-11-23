@@ -15,6 +15,7 @@ import 'package:likezzix/providers/attitude_providers.dart';
 import 'package:likezzix/providers/camera_providers.dart';
 import 'package:likezzix/providers/composition_providers.dart';
 import 'package:likezzix/providers/preset_providers.dart';
+import 'package:likezzix/providers/shooting_providers.dart';
 import 'package:likezzix/screens/camera_screen.dart';
 import 'package:likezzix/services/preset_repository.dart';
 import 'package:likezzix/widgets/dynamic_frame.dart';
@@ -138,6 +139,13 @@ void main() {
     await select(of('cmp-thirds'));
     await person();
     await binding.takeScreenshot('03_angle_guide');
+
+    // 4. 오르는 대각선: 촬영자에게 넘긴 잠금 상태
+    pitchOffset = 0;
+    await select(of('cmp-ascending'));
+    container.read(guideLockProvider.notifier).lock();
+    await person(scale: 0.82);
+    await binding.takeScreenshot('04_lock');
   });
 }
 

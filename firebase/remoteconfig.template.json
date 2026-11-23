@@ -1,18 +1,18 @@
 {
   "parameterGroups": {
     "ads": {
-      "description": "광고 노출 제어 (PRD: 런칭 초기 모두 false). 앱 기본값: mobile/lib/core/remote_config_keys.dart",
+      "description": "광고 노출 제어. 2026-11-24 출시부터 네이티브·전면 ON (보상형은 쓰는 화면이 없어 OFF). 앱 기본값: mobile/lib/core/remote_config_keys.dart",
       "parameters": {
         "show_native_ad": {
           "defaultValue": {
-            "value": "false"
+            "value": "true"
           },
           "valueType": "BOOLEAN",
-          "description": "프리셋 시트 5번째 칸 네이티브 광고"
+          "description": "구도 목록 카드 4장 뒤 네이티브 광고"
         },
         "show_interstitial_ad": {
           "defaultValue": {
-            "value": "false"
+            "value": "true"
           },
           "valueType": "BOOLEAN",
           "description": "저장 N회마다 전면 광고"
@@ -73,7 +73,7 @@
         },
         "ios_store_url": {
           "defaultValue": {
-            "value": ""
+            "value": "https://apps.apple.com/app/id6836852971"
           },
           "valueType": "STRING",
           "description": "App Store 등록 후 https://apps.apple.com/app/id<번호> (비우면 iOS 선택 업데이트 안내 안 함)"

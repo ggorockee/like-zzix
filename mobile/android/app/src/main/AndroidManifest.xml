@@ -9,6 +9,13 @@
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="29"
         tools:replace="android:maxSdkVersion"/>
+    <!-- 카메라 플러그인이 병합하는 권한 중 쓰지 않는 것 제거 (동영상·사진 읽기 없음) -->
+    <uses-permission
+        android:name="android.permission.RECORD_AUDIO"
+        tools:node="remove"/>
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        tools:node="remove"/>
     <uses-feature
         android:name="android.hardware.camera"
         android:required="true"/>

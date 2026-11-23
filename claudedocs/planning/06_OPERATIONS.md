@@ -96,7 +96,8 @@
 | 광고 단위 | [x] 플랫폼별 3개 | `preset_grid_native`(네이티브 고급형), `photo_saved_interstitial`(전면), `custom_silhouette_rewarded`(보상형, 기본 리워드 1 Reward) |
 | App ID 입력 위치 | git 제외 파일 | Android `mobile/android/local.properties`의 `admob.appId`, iOS `mobile/ios/Flutter/Secrets.xcconfig`의 `ADMOB_APP_ID` |
 | 광고 단위 ID 입력 위치 | git 제외 파일 | `mobile/env/prod.json` (`ADMOB_ANDROID_*`, `ADMOB_IOS_*`) |
-| 노출 제어 | Remote Config `ads` 그룹 | 출시 초기 모두 false → 사용자 확보 후 하나씩 켜고 대시보드·AdMob으로 영향 확인 |
+| 노출 제어 | Remote Config `ads` 그룹 | 2026-11-24 네이티브(구도 목록)·전면(저장 3회마다, 잠금 중에는 미룸) ON, 보상형 OFF. 계정 woohalabs@gmail.com. 지표: `ad_native_shown`·`ad_interstitial_shown`·`ad_load_failed` |
+| app-ads.txt | [x] 2026-11-24 | `woohalabs.com/app-ads.txt`(기존)와 `like-zzix.woohalabs.com/app-ads.txt`(서버 제공) |
 | UMP 동의 메시지 | [ ] 스토어 연결 후 | 2026-11-19 시도: 새 유럽 규정 메시지에 두 앱과 개인정보처리방침 URL(`https://like-zzix.woohalabs.com/privacy`)을 지정했으나 게시·임시저장 버튼이 비활성 → 저장하지 않음. 기존 메시지는 스토어에 연결된 리뷰맵 앱만 대상이라 스토어 연결이 필요한 것으로 추정 (확인 필요). 출시 후 다시 생성·게시 |
 | 실제 ID 반영 | [x] 2026-11-19 | Android `local.properties`, iOS `Secrets.xcconfig`, `env/prod.json`에 입력. 릴리스 빌드에서 Android 매니페스트·iOS Info.plist App ID와 광고 단위 6개 포함 확인 |
 

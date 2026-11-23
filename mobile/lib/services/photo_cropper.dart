@@ -29,7 +29,17 @@ abstract final class PhotoCropper {
 
   static String? _cropFile((String, double) args) {
     final (path, ratio) = args;
-    final decoded = img.decodeJpg(File(path).readAsBytesSync());
+    final bytes = File(path).readAsBytesSync();
+    // 헤더만 읽어 이미 같은 비율이면 디코딩하지 않는다 (12MP 디코딩은 느리다)
+    final info = img.JpegDecoder().startDecode(bytes);
+    if (info != null) {
+      final orientation = img.decodeJpgExif(bytes)?.imageIfd.orientation ?? 1;
+      final turned = orientation >= 5;
+      final w = turned ? info.height : info.width;
+      final h = turned ? info.width : info.height;
+      if (region(w, h, ratio) == null) return null;
+    }
+    final decoded = img.decodeJpg(bytes);
     if (decoded == null) return null;
     // 회전 정보(EXIF)를 실제 픽셀에 반영한 뒤 자른다
     final upright = img.bakeOrientation(decoded);

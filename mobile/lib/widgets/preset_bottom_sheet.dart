@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
@@ -5,7 +7,9 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 import '../core/app_theme.dart';
 import '../models/preset.dart';
 import '../providers/ad_providers.dart';
+import '../providers/api_providers.dart';
 import '../providers/preset_providers.dart';
+import '../services/telemetry_service.dart';
 import 'composition_card.dart';
 import 'native_ad_tile.dart';
 
@@ -26,8 +30,8 @@ Future<void> showPresetBottomSheet(BuildContext context) {
 class PresetBottomSheet extends ConsumerStatefulWidget {
   const PresetBottomSheet({super.key});
 
-  /// 네이티브 광고가 들어갈 위치 (5번째 칸, PRD Step 2).
-  static const adSlotIndex = 4;
+  /// 네이티브 광고 앞에 놓이는 카드 수
+  static const adAfterCards = 4;
 
   @override
   ConsumerState<PresetBottomSheet> createState() => _PresetBottomSheetState();
@@ -51,6 +55,9 @@ class _PresetBottomSheetState extends ConsumerState<PresetBottomSheet> {
     if (!mounted) {
       await ad?.dispose();
       return;
+    }
+    if (ad != null) {
+      ref.read(telemetryProvider)?.record(AppEvent.adNativeShown);
     }
     setState(() => _nativeAd = ad);
   }
@@ -83,29 +90,33 @@ class _PresetBottomSheetState extends ConsumerState<PresetBottomSheet> {
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => const Center(child: Text('구도를 불러오지 못했어요')),
               data: (all) {
-                final cells = _buildCells(context, [
+                final items = [
                   for (final p in all)
                     if (p.category == _category) p,
-                ], selected);
-                return GridView.builder(
+                ];
+                final ad = _nativeAd;
+                // 카드 4장 뒤(모자라면 끝)에 광고 한 줄
+                final split = ad == null
+                    ? items.length
+                    : math.min(PresetBottomSheet.adAfterCards, items.length);
+                return CustomScrollView(
                   controller: scrollController,
-                  // 하단 내비게이션 바(제스처 바) 뒤로 칸이 숨지 않게 inset 추가
-                  padding: EdgeInsets.fromLTRB(
-                    12,
-                    8,
-                    12,
-                    24 + MediaQuery.viewPaddingOf(context).bottom,
-                  ),
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 10,
-                    crossAxisSpacing: 10,
-                    // 큰 글자에서는 글자 줄만큼 칸을 늘린다
-                    mainAxisExtent:
-                        118 + MediaQuery.textScalerOf(context).scale(46),
-                  ),
-                  itemCount: cells.length,
-                  itemBuilder: (context, i) => cells[i],
+                  slivers: [
+                    _grid(context, items.sublist(0, split), selected),
+                    if (ad != null)
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(12, 2, 12, 10),
+                        sliver: SliverToBoxAdapter(child: NativeAdTile(ad: ad)),
+                      ),
+                    if (split < items.length)
+                      _grid(context, items.sublist(split), selected),
+                    SliverToBoxAdapter(
+                      child: SizedBox(
+                        // 하단 내비게이션 바(제스처 바) 뒤로 숨지 않게
+                        height: 24 + MediaQuery.viewPaddingOf(context).bottom,
+                      ),
+                    ),
+                  ],
                 );
               },
             ),
@@ -115,32 +126,32 @@ class _PresetBottomSheetState extends ConsumerState<PresetBottomSheet> {
     );
   }
 
-  List<Widget> _buildCells(
-    BuildContext context,
-    List<Preset> presets,
-    Preset? selected,
-  ) {
-    final cells = <Widget>[
-      for (final preset in presets)
-        CompositionCard(
-          key: ValueKey(preset.id),
-          preset: preset,
-          selected: preset == selected,
-          onTap: () {
-            ref.read(selectedPresetProvider.notifier).toggle(preset);
-            Navigator.of(context).pop();
+  Widget _grid(BuildContext context, List<Preset> items, Preset? selected) =>
+      SliverPadding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 2),
+        sliver: SliverGrid.builder(
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            mainAxisSpacing: 10,
+            crossAxisSpacing: 10,
+            // 큰 글자에서는 글자 줄만큼 칸을 늘린다
+            mainAxisExtent: 118 + MediaQuery.textScalerOf(context).scale(46),
+          ),
+          itemCount: items.length,
+          itemBuilder: (context, i) {
+            final preset = items[i];
+            return CompositionCard(
+              key: ValueKey(preset.id),
+              preset: preset,
+              selected: preset == selected,
+              onTap: () {
+                ref.read(selectedPresetProvider.notifier).toggle(preset);
+                Navigator.of(context).pop();
+              },
+            );
           },
         ),
-    ];
-    final ad = _nativeAd;
-    if (ad != null && cells.length >= PresetBottomSheet.adSlotIndex) {
-      cells.insert(
-        PresetBottomSheet.adSlotIndex,
-        NativeAdTile(key: const ValueKey('native-ad'), ad: ad),
       );
-    }
-    return cells;
-  }
 }
 
 class _Handle extends StatelessWidget {

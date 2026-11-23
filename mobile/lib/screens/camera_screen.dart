@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:app_settings/app_settings.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -20,6 +21,7 @@ import '../models/preview_transform.dart';
 import '../models/composition_fit.dart';
 import '../models/subject.dart';
 import '../models/zoom_range.dart';
+import '../providers/ad_providers.dart';
 import '../providers/api_providers.dart';
 import '../providers/attitude_providers.dart';
 import '../providers/guide_motion_provider.dart';
@@ -28,6 +30,7 @@ import '../providers/composition_providers.dart';
 import '../services/photo_cropper.dart';
 import '../services/vision_service.dart';
 import '../services/telemetry_service.dart';
+import '../widgets/about_sheet.dart';
 import '../widgets/angle_indicator.dart';
 import '../widgets/camera_preview_fullscreen.dart';
 import '../widgets/frame_guide.dart';
@@ -64,6 +67,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   bool _capturing = false;
   bool _switching = false;
   bool _flash = false;
+
+  /// 권한 창에서 방금 거부함: 창이 닫히며 오는 resumed에서는 다시 묻지 않는다.
+  bool _permissionAsked = false;
 
   /// 앱이 포그라운드인지. 권한 팝업 등으로 inactive일 때 열린 카메라는 바로 닫는다.
   bool _foreground = true;
@@ -130,14 +136,27 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
         unawaited(controller.dispose());
       case AppLifecycleState.resumed:
         _foreground = true;
-        if (_controller == null) unawaited(_startCamera());
+        // Android는 열기를 시도할 때마다 권한을 다시 묻는다: 거부한 뒤에는
+        // 설정에서 돌아왔을 때만 다시 시도한다
+        if (_controller == null && !_permissionAsked) {
+          unawaited(_startCamera());
+        }
+        _permissionAsked = false;
       case AppLifecycleState.detached || AppLifecycleState.hidden:
         break;
     }
   }
 
-  Future<void> _startCamera() =>
-      _opening ??= _openCamera().whenComplete(() => _opening = null);
+  Future<void> _startCamera() => _opening ??= _openCamera().whenComplete(() {
+    _opening = null;
+    // 여는 동안 앱이 잠깐 비활성이었다가(권한 창 등) 그새 돌아왔으면 다시 연다
+    if (mounted &&
+        _foreground &&
+        _controller == null &&
+        _issue == _CameraIssue.none) {
+      unawaited(_startCamera());
+    }
+  });
 
   Future<void> _openCamera() async {
     final List<CameraDescription> cameras;
@@ -165,6 +184,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     } on CameraException catch (e) {
       await controller.dispose();
       if (!mounted) return;
+      _permissionAsked = e.code.startsWith('CameraAccess') && !_foreground;
       setState(
         () => _issue = e.code.startsWith('CameraAccess')
             ? _CameraIssue.permissionDenied
@@ -501,6 +521,11 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       final result = await ref
           .read(captureServiceProvider)
           .saveToGallery(await PhotoCropper.crop(photo.path, ratio));
+      if (result == SaveResult.saved) {
+        unawaited(
+          ref.read(saveAdProvider).onSaved(locked: ref.read(guideLockProvider)),
+        );
+      }
       if (result == SaveResult.saved && mounted) {
         setState(() => _lastPhotoPath = photo.path);
       }
@@ -514,7 +539,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
         SnackBar(
           content: Text(switch (result) {
             SaveResult.saved => '저장 완료',
-            SaveResult.permissionDenied => '사진 저장 권한을 허용해 주세요',
+            SaveResult.permissionDenied => '설정에서 사진 저장 권한을 허용해 주세요',
             SaveResult.failed => '사진을 저장하지 못했어요',
           }),
           // 잠금 중에는 갤러리로 빠져나가지 않게 한다
@@ -536,6 +561,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   void _setLocked(bool locked) {
     final notifier = ref.read(guideLockProvider.notifier);
     locked ? notifier.lock() : notifier.unlock();
+    if (!locked) unawaited(ref.read(saveAdProvider).showIfDue());
     // 잠금 중에는 시스템 제스처 바도 숨겨 실수로 앱을 나가지 않게 한다
     unawaited(
       SystemChrome.setEnabledSystemUIMode(
@@ -784,7 +810,11 @@ class _SettingsBar extends ConsumerWidget {
               ),
             ),
           ),
-          const SizedBox(width: 8),
+          IconButton(
+            tooltip: '앱 정보',
+            onPressed: () => showAboutSheet(context),
+            icon: const Icon(Icons.info_outline),
+          ),
           LockButton(
             locked: false,
             onLock: hasPreset ? onLock : null,
@@ -1178,7 +1208,7 @@ class _CameraFallback extends StatelessWidget {
       _CameraIssue.none => ('', false),
       _CameraIssue.unavailable => ('이 기기에서는 카메라를 사용할 수 없어요', false),
       _CameraIssue.permissionDenied => (
-        '카메라 권한이 필요해요\n설정 > 애플리케이션 > 라익찍스에서 허용해 주세요',
+        '카메라 권한이 필요해요\n설정에서 라익찍스의 카메라를 허용해 주세요',
         true,
       ),
       _CameraIssue.failed => ('카메라를 여는 중 문제가 생겼어요', true),
@@ -1200,10 +1230,16 @@ class _CameraFallback extends StatelessWidget {
                   Text(message, textAlign: TextAlign.center),
                   if (canRetry) ...[
                     const SizedBox(height: 12),
-                    OutlinedButton(
-                      onPressed: onRetry,
-                      child: const Text('다시 시도'),
-                    ),
+                    if (issue == _CameraIssue.permissionDenied)
+                      FilledButton(
+                        onPressed: AppSettings.openAppSettings,
+                        child: const Text('설정 열기'),
+                      )
+                    else
+                      OutlinedButton(
+                        onPressed: onRetry,
+                        child: const Text('다시 시도'),
+                      ),
                   ],
                 ],
               ),

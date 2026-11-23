@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -32,6 +33,14 @@ class LikeZzixApp extends ConsumerWidget {
       title: '라익찍스',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.dark,
+      locale: const Locale('ko'),
+      supportedLocales: const [Locale('ko')],
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
+      // 카메라 화면은 글자가 너무 커지면 조작부가 화면을 벗어난다
+      builder: (context, child) => MediaQuery.withClampedTextScaling(
+        maxScaleFactor: 1.35,
+        child: child!,
+      ),
       routerConfig: ref.watch(routerProvider),
     );
   }

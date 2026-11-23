@@ -81,6 +81,14 @@ abstract final class AppTheme {
       colorScheme: scheme,
       scaffoldBackgroundColor: ink,
       canvasColor: ink,
+      // 셔터를 가리지 않도록 조작부 위에 띄운다
+      snackBarTheme: const SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: inkRaised,
+        insetPadding: EdgeInsets.fromLTRB(16, 0, 16, 190),
+        contentTextStyle: TextStyle(color: white),
+        actionTextColor: coral,
+      ),
     );
   }
 }
