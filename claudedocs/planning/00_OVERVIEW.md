@@ -76,7 +76,7 @@
 | A1~A3 | admin 로그인, 프리셋 CRUD, 포즈 추출 (`04_ADMIN.md`). 운영 배포 완료, OAuth JS 출처 등록·보강 항목(드래그 정렬 등)은 `04_ADMIN.md` | [x] |
 | W1~W2 | web 랜딩, 정책 페이지, 딥링크 (`03_WEB.md`) | [ ] |
 | M7·S1.5 | SNS 로그인 + `is_staff`/`is_superuser` 광고 면제 (마지막, 클라이언트는 `feature/sns-auth` 브랜치) | [ ] |
-| R1 | 스토어 심사 제출 — 진행 현황 `07_RELEASE.md` (내부 테스트·TestFlight 업로드 완료, 심사 제출 전) | [ ] |
+| R1 | 스토어 심사 제출 (2026-11-24 iOS 심사·Play 비공개 테스트 검토 제출) — 기록 `07_RELEASE.md`, 이후 할 일 `10_POST_SUBMISSION.md` | [x] |
 
 ## 6. 공통 리스크 / 확인 필요 사항
 
