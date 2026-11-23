@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/app_theme.dart';
-import 'silhouette_painter.dart';
+import '../models/composition_fit.dart';
 
 /// 레퍼런스 사진 비율의 촬영 프레임: 모서리 표시 + 3분할 격자.
 class FrameGuidePainter extends CustomPainter {
@@ -12,7 +12,7 @@ class FrameGuidePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final frame = SilhouettePainter.frameRect(size, aspectRatio);
+    final frame = BodyTarget.fitFrame(size, aspectRatio);
 
     if (showGrid) {
       final grid = Paint()

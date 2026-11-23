@@ -3,39 +3,26 @@ import 'package:flutter/material.dart';
 import '../core/app_theme.dart';
 import '../core/env.dart';
 import '../models/preset.dart';
-import 'silhouette_painter.dart';
 
-/// 프리셋 레퍼런스 사진. 사진이 없는 빌드(공개 저장소 clone 등)에서는 실루엣으로 대체.
+/// 구도의 예시 사진. 관리자 콘솔 사진 → 번들 사진 → 빈 자리 순으로 보여 준다.
 class ReferenceImage extends StatelessWidget {
   const ReferenceImage({
     super.key,
     required this.preset,
     this.fit = BoxFit.cover,
-    this.silhouetteStroke = 1.6,
-    this.showFallback = true,
   });
 
   final Preset preset;
   final BoxFit fit;
-  final double silhouetteStroke;
-
-  /// 사진이 없을 때 실루엣으로 대체할지 (오버레이처럼 외곽선을 따로 그리는 곳은 false)
-  final bool showFallback;
 
   @override
   Widget build(BuildContext context) {
-    final Widget fallback = !showFallback
-        ? const SizedBox.shrink()
-        : CustomPaint(
-            size: Size.infinite,
-            painter: SilhouettePainter(
-              // 아래에서 통째로 뒤집으므로 원래 방향으로 그린다
-              preset: preset.mirrored ? preset.flipped : preset,
-              color: AppTheme.white,
-              strokeWidth: silhouetteStroke,
-              fillOpacity: 0.15,
-            ),
-          );
+    const fallback = ColoredBox(
+      color: AppTheme.inkRaised,
+      child: Center(
+        child: Icon(Icons.image_outlined, color: AppTheme.whiteFaint),
+      ),
+    );
     final Widget local = preset.referenceAsset == null
         ? fallback
         : Image.asset(
@@ -46,7 +33,6 @@ class ReferenceImage extends StatelessWidget {
             gaplessPlayback: true,
             errorBuilder: (context, error, stackTrace) => fallback,
           );
-    // 관리자 콘솔에서 올린 사진이 있으면 우선 사용, 못 받으면 번들 사진 → 실루엣
     final url = resolveReferenceUrl(preset.referenceUrl, Env.apiBaseUrl);
     final Widget image = url == null
         ? local
@@ -55,6 +41,9 @@ class ReferenceImage extends StatelessWidget {
             fit: fit,
             cacheWidth: 540,
             gaplessPlayback: true,
+            // 받는 동안에도 번들 사진을 보여 빈 칸이 없게 한다
+            frameBuilder: (context, child, frame, sync) =>
+                sync || frame != null ? child : local,
             errorBuilder: (context, error, stackTrace) => local,
           );
     return preset.mirrored ? Transform.flip(flipX: true, child: image) : image;

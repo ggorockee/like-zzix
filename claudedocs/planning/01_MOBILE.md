@@ -118,8 +118,8 @@ PRD 지정 4개 폴더(`screens`, `services`, `widgets`, `models`)를 유지하�
 
 | 단계 | 내용 | 코드 |
 |---|---|---|
-| 템플릿 | 정규화 좌표(0~1) JSON 12종, 탭 4개 | `assets/templates/compositions.json`, `models/composition.dart` |
-| 선택 | [도식 / 예시] 카드. 예시 사진이 없으면 데이터로 그린 일러스트 | `widgets/composition_card.dart`, `preset_bottom_sheet.dart` |
+| 템플릿 | 정규화 좌표(0~1) JSON 23종, 탭 4개 | `assets/templates/compositions.json`, `models/composition.dart` |
+| 선택 | [도식 / 예시] 카드. 사진은 관리자 콘솔 또는 번들에서 같은 id로 합침, 없으면 데이터로 그린 일러스트 | `widgets/composition_card.dart`, `preset_bottom_sheet.dart` |
 | 인식 | 얼굴 구도는 얼굴 인식(여러 명·고개 방향), 전신 구도는 포즈 인식. 필요한 것만, 사람이 없으면 약 5fps | `services/vision_service.dart` |
 | 판정 | 자리마다 사람 배정 → 위치·크기·시선 오차 ÷ 허용 오차. 모두 1 이하면 90점. 90점 진입·86점 이탈, 0.25초 유지 | `models/composition_fit.dart`, `providers/composition_providers.dart` |
 | 코칭 | 사람 찾기 → 잘림 → 거리(걸음 수) → 폰 각도 → 위치 → 시선 순으로 한 문장. 여러 명이면 "왼쪽 분, 조금 더 높게" | `models/coach.dart` |
@@ -133,24 +133,27 @@ PRD 지정 4개 폴더(`screens`, `services`, `widgets`, `models`)를 유지하�
 |---|---|
 | `category` | basic(기본/인물), travel(배경/여행), pose(포즈/느낌), special(특수/2인) |
 | `angle` | `elevation_min`·`elevation_max`(위를 볼 때 +), `roll_tolerance` |
-| `elements[]` | `type` line·rect·arrow·grid, `points` 또는 `rect`[왼쪽, 위, 폭, 높이], `style` dashed, `weight`, `label`, `role` gaze |
+| `elements[]` | `type` line·rect·arrow·grid·circle, `points` 또는 `rect`[왼쪽, 위, 폭, 높이], `radius`(원, 높이 대비), `curve`·`closed`(선), `style` dashed, `weight`, `label`, `role` gaze |
 | `subjects[]` (얼굴) | `detect` face, `anchor`[x, y], `radius`, `size`[최소, 최대] (모두 뷰파인더 높이 대비), `gaze` left·right, `label` |
 | `subjects[]` (전신) | `detect` body, `head`[x, y], `bottom`[x, y], `span` feet·hips·shoulders |
-| `example` / `scene` | 예시 사진 경로 / 사진이 없을 때 일러스트 배경 |
+| `photo` / `scene` | 예시 사진을 관리자 콘솔에서 관리하는지 / 사진이 없을 때 일러스트 배경 |
 
 예시 (시선 앞 여백):
 
 {"id":"cmp-gaze-room","category":"pose","title":"시선 앞 여백","angle":{"elevation_min":-5,"elevation_max":5,"roll_tolerance":3},"elements":[{"type":"arrow","points":[[0.58,0.36],[0.12,0.36]],"label":"시선","role":"gaze"}],"subjects":[{"detect":"face","anchor":[0.7,0.36],"radius":0.06,"size":[0.1,0.2],"gaze":"left"}]}
 
-| 구도 | 탭 | 인식 | 조건 |
-|---|---|---|---|
-| 중앙 배치 · 삼분할 · 카페·반신 | 기본/인물 | 얼굴 | 위치·크기·각도 |
-| 전신 | 기본/인물 | 포즈 | 머리·발끝·좌우·각도(+5~+10°) |
-| 여백 활용 · 소실점 · 풍경+인물 | 배경/여행 | 포즈 | 머리·발끝·좌우·각도 |
-| 프레임 속 프레임 | 배경/여행 | 얼굴 | 위치·크기·각도 |
-| 시선 앞 여백 | 포즈/느낌 | 얼굴 | 위치·크기·시선(12° 이상)·각도 |
-| 앉은 포즈 | 포즈/느낌 | 포즈 | 머리·엉덩이·각도 |
-| 2인 높낮이 · 2인 앞뒤 | 특수/2인 | 얼굴 2명 | 각자 위치·크기·각도 |
+| 탭 | 사진 있음 | 사진 없음 (일러스트) |
+|---|---|---|
+| 기본/인물 | 중앙 배치, 삼분할, 얼굴 타이트 크롭 | 전신, 카페·반신 |
+| 배경/여행 | 좌우 대칭, 원형 프레임, 오르는 대각선, 소실점, 전경 활용 | 여백 활용, 프레임 속 프레임, 내려가는 대각선, 유도선, 반복 패턴, 풍경+인물 |
+| 포즈/느낌 | 삼각형 포즈, S자 포즈 | 시선 앞 여백, 앉은 포즈 |
+| 특수/2인 | 앞뒤 배치, 거울 반영 | 높낮이 배치 |
+
+사진 합치기 규칙 (`PresetRepository.merge`):
+
+- 관리자 콘솔(또는 번들 `presets.json`)의 프리셋 id가 구도 id(`cmp-…`)와 같으면 제목·팁·가이드·순서·사진을 구도에 입힌다. 판정용 좌표와 권장 각도는 앱 구도 데이터를 쓴다.
+- 사진 있는 구도를 콘솔에서 비공개로 바꾸면 앱에서 숨긴다. 사진 없는 구도에 사진을 추가하려면 같은 id로 프리셋을 만들어 공개한다.
+- 카테고리 id는 full_body=기본/인물, cafe=배경/여행, look_back=포즈/느낌, side=특수/2인 (저장된 문서와 호환).
 
 선(문틀·복도·테이블·지평선)에 배경이 맞는지는 판정하지 않고 안내만 한다.
 

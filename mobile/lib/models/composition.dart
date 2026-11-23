@@ -15,7 +15,7 @@ class CompositionTemplate {
     required this.elements,
     required this.subjects,
     this.scene = 'plain',
-    this.example,
+    this.hasPhoto = false,
   });
 
   factory CompositionTemplate.fromJson(Map<String, dynamic> json) {
@@ -31,7 +31,7 @@ class CompositionTemplate {
       ],
       subjects: subjects,
       scene: json['scene'] as String? ?? 'plain',
-      example: json['example'] as String?,
+      hasPhoto: json['photo'] as bool? ?? false,
     );
   }
 
@@ -41,14 +41,14 @@ class CompositionTemplate {
   /// 예시 사진이 없을 때 그리는 일러스트 배경
   final String scene;
 
-  /// 예시 사진 asset
-  final String? example;
+  /// 예시 사진을 관리자 콘솔에서 관리하는 구도 (`PresetRepository.merge`)
+  final bool hasPhoto;
 
   CompositionTemplate get mirrored => CompositionTemplate(
     elements: [for (final e in elements) e.mirrored],
     subjects: [for (final s in subjects) s.mirrored],
     scene: scene,
-    example: example,
+    hasPhoto: hasPhoto,
   );
 }
 
@@ -59,7 +59,7 @@ Offset _point(dynamic json) {
   return Offset((p[0] as num).toDouble(), (p[1] as num).toDouble());
 }
 
-enum GuideElementType { line, rect, arrow, grid }
+enum GuideElementType { line, rect, arrow, grid, circle }
 
 @immutable
 class GuideElement {
@@ -69,6 +69,9 @@ class GuideElement {
     this.rect = Rect.zero,
     this.cols = 3,
     this.rows = 3,
+    this.radius = 0,
+    this.closed = false,
+    this.curve = false,
     this.dashed = false,
     this.weight = 1,
     this.label,
@@ -92,6 +95,9 @@ class GuideElement {
             ),
       cols: (json['cols'] as num?)?.toInt() ?? 3,
       rows: (json['rows'] as num?)?.toInt() ?? 3,
+      radius: (json['radius'] as num?)?.toDouble() ?? 0,
+      closed: json['closed'] as bool? ?? false,
+      curve: json['curve'] as bool? ?? false,
       dashed: json['style'] == 'dashed',
       weight: (json['weight'] as num?)?.toDouble() ?? 1,
       label: json['label'] as String?,
@@ -104,6 +110,15 @@ class GuideElement {
   final Rect rect;
   final int cols;
   final int rows;
+
+  /// 원 반지름 (뷰파인더 높이 대비, 어느 비율에서도 둥글다)
+  final double radius;
+
+  /// 선을 닫아 도형으로 (삼각형 등)
+  final bool closed;
+
+  /// 점을 부드러운 곡선으로 잇기
+  final bool curve;
   final bool dashed;
 
   /// 선 굵기 배율
@@ -119,6 +134,9 @@ class GuideElement {
     rect: Rect.fromLTWH(1 - rect.right, rect.top, rect.width, rect.height),
     cols: cols,
     rows: rows,
+    radius: radius,
+    closed: closed,
+    curve: curve,
     dashed: dashed,
     weight: weight,
     label: label,

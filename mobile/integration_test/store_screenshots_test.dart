@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -20,7 +19,6 @@ import 'package:likezzix/screens/camera_screen.dart';
 import 'package:likezzix/services/preset_repository.dart';
 import 'package:likezzix/widgets/dynamic_frame.dart';
 import 'package:likezzix/widgets/preset_bottom_sheet.dart';
-import 'package:likezzix/widgets/silhouette_painter.dart';
 
 /// App Store / Play 스크린샷. 시뮬레이터에는 카메라가 없어서 카메라 자리에
 /// 선택한 프리셋의 레퍼런스 사진(생성형 AI)을 그리고, 자세·포즈 판정 값을 주입한다.
@@ -29,9 +27,12 @@ void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets('store screenshots', (tester) async {
-    final presets = await PresetRepository().loadBundled();
-    final fullBody = presets.firstWhere((p) => p.id == 'full-body-low-angle');
-    final cafe = presets.firstWhere((p) => p.id == 'drink-cafe');
+    final repository = PresetRepository();
+    final presets = PresetRepository.merge(
+      await repository.loadTemplates(),
+      await repository.loadBundled(),
+    );
+    Preset of(String id) => presets.firstWhere((p) => p.id == id);
 
     // 자세: 기본은 선택한 프리셋 목표 각도와 일치. pitchOffset으로 어긋난 상태를 만든다.
     var pitchOffset = 0.0;
@@ -48,12 +49,7 @@ void main() {
           ref.onDispose(router.dispose);
           return router;
         }),
-        presetsProvider.overrideWith(
-          (ref) async => [
-            ...await PresetRepository().loadTemplates(),
-            ...presets,
-          ],
-        ),
+        presetsProvider.overrideWith((ref) async => presets),
         availableCamerasProvider.overrideWith((ref) async => const []),
         visionClockProvider.overrideWithValue(() => now),
         attitudeProvider.overrideWith((ref) {
@@ -123,9 +119,8 @@ void main() {
       await _settle(tester);
     }
 
-    // 1. 전신샷: 실루엣에 맞추면 "지금 찍으세요"
-    pitchOffset = 0;
-    await select(fullBody);
+    // 1. 좌우 대칭: 구도가 맞으면 가이드가 사라지고 초록 테두리
+    await select(of('cmp-symmetry'));
     await person();
     await binding.takeScreenshot('01_perfect_match');
 
@@ -138,10 +133,9 @@ void main() {
     Navigator.of(tester.element(find.byType(PresetBottomSheet))).pop();
     await _settle(tester);
 
-    // 3. 음료 컷: 각도가 어긋나면 어느 쪽으로 얼마나 기울일지 안내
-    pitchOffset = 12; // 권장 범위(±3°)까지 9°
-    await select(cafe);
-    // 사람은 구도에 맞았지만 폰 각도만 어긋난 상태
+    // 3. 삼분할: 사람은 구도에 맞았지만 폰 각도만 어긋난 상태
+    pitchOffset = 9;
+    await select(of('cmp-thirds'));
     await person();
     await binding.takeScreenshot('03_angle_guide');
   });
@@ -154,7 +148,7 @@ Future<void> _settle(WidgetTester tester) async {
   }
 }
 
-/// 카메라 프리뷰 대신: 프리셋 사진을 가이드 프레임 위치에 그리고, 나머지는 같은 사진을 흐리게 채운다.
+/// 카메라 프리뷰 대신: 고른 구도의 예시 사진을 뷰파인더에 채운다.
 class _DemoBackdrop extends ConsumerWidget {
   const _DemoBackdrop();
 
@@ -168,27 +162,7 @@ class _DemoBackdrop extends ConsumerWidget {
     if (preset == null || asset == null) {
       return const ColoredBox(color: Colors.black);
     }
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final frame = SilhouettePainter.frameRect(
-          constraints.biggest,
-          preset.aspectRatio,
-        );
-        return Stack(
-          children: [
-            Positioned.fill(
-              child: ImageFiltered(
-                imageFilter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-                child: Image.asset(asset, fit: BoxFit.cover),
-              ),
-            ),
-            Positioned.fromRect(
-              rect: frame,
-              child: Image.asset(asset, fit: BoxFit.fill),
-            ),
-          ],
-        );
-      },
-    );
+    // 예시 사진을 카메라 프리뷰처럼 뷰파인더에 채운다
+    return SizedBox.expand(child: Image.asset(asset, fit: BoxFit.cover));
   }
 }

@@ -5,35 +5,21 @@ import 'package:likezzix/models/preset.dart';
 import 'package:likezzix/services/preset_repository.dart';
 
 void main() {
-  test('번들 프리셋: 모두 33점·윤곽선·가이드 포함, sort_order 정렬', () {
-    final raw = File(PresetRepository.bundledAsset).readAsStringSync();
-    final presets = PresetRepository.parse(raw);
-
-    expect(presets.length, greaterThanOrEqualTo(2));
+  test('번들 사진: 모두 33점·가이드·사진 포함, sort_order 정렬', () {
+    final presets = PresetRepository.parse(
+      File(PresetRepository.bundledAsset).readAsStringSync(),
+    );
+    expect(presets, hasLength(12));
     for (final p in presets) {
       expect(p.landmarks, hasLength(PoseIndex.count), reason: p.id);
       expect(p.title, isNotEmpty);
-      expect(p.hasOutline, isTrue, reason: p.id);
       expect(p.guide, isNotEmpty, reason: p.id);
-      expect(p.referenceAsset, startsWith('assets/presets/reference/'));
-      for (final o in p.outline) {
-        expect(o.dx, inInclusiveRange(0, 1), reason: p.id);
-        expect(o.dy, inInclusiveRange(0, 1), reason: p.id);
-      }
+      expect(p.referenceAsset, 'assets/presets/reference/${p.id}.jpg');
+      expect(File(p.referenceAsset!).existsSync(), isTrue, reason: p.id);
     }
     final orders = presets.map((p) => p.sortOrder).toList();
     expect(orders, [...orders]..sort());
     expect(presets.map((p) => p.id).toSet(), hasLength(presets.length));
-  });
-
-  test('번들 프리셋: 출시용 2개(전신샷·음료) + 번들 사진 존재', () {
-    final presets = PresetRepository.parse(
-      File(PresetRepository.bundledAsset).readAsStringSync(),
-    );
-    expect(presets.map((p) => p.id), ['full-body-low-angle', 'drink-cafe']);
-    for (final p in presets) {
-      expect(File(p.referenceAsset!).existsSync(), isTrue, reason: p.id);
-    }
   });
 
   test('랜드마크 수가 33이 아닌 항목은 건너뜀', () {
@@ -48,8 +34,7 @@ void main() {
     final presets = PresetRepository.parse(raw);
     expect(presets.map((p) => p.id), ['ok']);
     expect(presets.single.aspectRatio, closeTo(0.8, 1e-9));
-    expect(presets.single.category, PresetCategory.pose);
-    expect(presets.single.hasOutline, isFalse);
+    expect(presets.single.category, PresetCategory.special);
     expect(presets.single.guide, isEmpty);
   });
 }

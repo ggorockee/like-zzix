@@ -31,8 +31,7 @@ mobile/firebase.json
 mobile/assets/presets/reference/*
 !mobile/assets/presets/reference/.gitkeep
 # 생성형 AI로 만든 자체 레퍼런스 사진은 출시 번들에 포함
-!mobile/assets/presets/reference/full-body-low-angle.jpg
-!mobile/assets/presets/reference/drink-cafe.jpg
+!mobile/assets/presets/reference/cmp-*.jpg
 
 # 브라우저 자동화 스냅샷·스크린샷 (참고 사진이 찍힐 수 있음)
 .playwright-mcp/

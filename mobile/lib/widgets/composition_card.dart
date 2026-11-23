@@ -157,19 +157,10 @@ class CompositionExample extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final template = preset.template;
-    if (template == null) return ReferenceImage(preset: preset);
-    final scene = CustomPaint(
-      size: Size.infinite,
-      painter: _ScenePainter(template),
-    );
-    final example = template.example;
-    if (example == null) return scene;
-    return Image.asset(
-      example,
-      fit: BoxFit.cover,
-      cacheWidth: 300,
-      errorBuilder: (_, _, _) => scene,
-    );
+    if (preset.hasPhoto || template == null) {
+      return ReferenceImage(preset: preset);
+    }
+    return CustomPaint(size: Size.infinite, painter: _ScenePainter(template));
   }
 }
 
