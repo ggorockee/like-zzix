@@ -22,6 +22,9 @@ class ZoomRange {
 
   static const none = ZoomRange(1, 1);
 
+  /// 초광각을 별도 카메라로 여는 기기(iOS)에서, 초광각까지 포함한 범위
+  ZoomRange get withUltraWide => ZoomRange(math.min(min, appMin), max);
+
   final double min;
   final double max;
 

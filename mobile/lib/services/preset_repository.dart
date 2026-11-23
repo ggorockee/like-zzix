@@ -5,13 +5,33 @@ import 'package:flutter/services.dart';
 
 import '../models/preset.dart';
 
-/// 프리셋 공급원. 현재는 앱 번들 기본 프리셋만 사용 (서버 연동은 고도화 단계).
+/// 앱 번들에 든 실루엣 템플릿과 사진 프리셋.
 class PresetRepository {
   PresetRepository([AssetBundle? bundle]) : _bundle = bundle ?? rootBundle;
 
   static const bundledAsset = 'assets/presets/presets.json';
 
   final AssetBundle _bundle;
+
+  static const templatesAsset = 'assets/templates/templates.json';
+
+  /// 상황별 실루엣 템플릿 (앱에 항상 포함)
+  Future<List<Preset>> loadTemplates() async =>
+      parseTemplates(await _bundle.loadString(templatesAsset));
+
+  static List<Preset> parseTemplates(String raw) {
+    final items =
+        (jsonDecode(raw) as Map<String, dynamic>)['items'] as List<dynamic>;
+    final templates = <Preset>[];
+    for (final (i, item) in items.indexed) {
+      try {
+        templates.add(Preset.fromTemplateJson(item as Map<String, dynamic>, i));
+      } on Object catch (e) {
+        debugPrint('[Preset] 잘못된 템플릿 건너뜀: $e');
+      }
+    }
+    return templates;
+  }
 
   Future<List<Preset>> loadBundled() async {
     final raw = await _bundle.loadString(bundledAsset);

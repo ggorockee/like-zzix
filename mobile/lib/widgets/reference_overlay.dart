@@ -2,33 +2,29 @@ import 'package:flutter/material.dart';
 
 import '../core/app_theme.dart';
 import '../models/guide_motion.dart';
-import '../models/pose_match.dart';
 import '../models/preset.dart';
+import '../models/subject.dart';
 import 'reference_image.dart';
 import 'silhouette_painter.dart';
+import 'template_painter.dart';
 
-/// 카메라 위에 겹치는 레퍼런스: 원본 사진(반투명) + 인물 외곽선 + 실시간 관절 점.
+/// 고스트: 처음 위치를 잡을 때만 잠깐 보이는 반투명 실루엣(또는 레퍼런스 사진).
+/// 사람이 인식되면 [visible]이 꺼지며 스르륵 사라지고, 동적 프레임이 이어받는다.
 ///
-/// 사진·외곽선·관절 모두 같은 프레임 영역([SilhouettePainter.frameRect]) 기준.
-/// 사진·외곽선은 목표 각도에서 벗어난 만큼([motion]) 움직이고, 각도가 맞으면 프레임에 붙는다.
-/// 실시간 관절은 실제 사람 위치이므로 움직이지 않는다.
+/// 권장 각도에서 벗어난 만큼([motion]) 실제 장면처럼 움직인다.
 class ReferenceOverlay extends StatelessWidget {
   const ReferenceOverlay({
     super.key,
     required this.preset,
     required this.opacity,
-    this.match,
-    this.live,
-    this.perfect = false,
+    required this.visible,
     this.motion = GuideMotion.still,
     this.focal = 1,
   });
 
   final Preset preset;
   final double opacity;
-  final PoseMatchResult? match;
-  final List<PoseLandmark>? live;
-  final bool perfect;
+  final bool visible;
   final GuideMotion motion;
 
   /// 화면 단위 초점거리 ([GuideMotion.focalLength])
@@ -37,105 +33,68 @@ class ReferenceOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return IgnorePointer(
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final frame = SilhouettePainter.frameRect(
-            constraints.biggest,
-            preset.aspectRatio,
-          );
-          return Stack(
-            children: [
-              Positioned.fill(
-                child: Transform(
-                  transform: motion.matrix(constraints.biggest, focal),
-                  // 움직이는 동안 사진·외곽선은 다시 그리지 않고 변환만 바꾼다
-                  child: RepaintBoundary(
-                    child: Stack(
-                      children: [
-                        Positioned.fromRect(
-                          rect: frame,
-                          child: Opacity(
-                            opacity: opacity,
-                            child: ReferenceImage(
-                              preset: preset,
-                              fit: BoxFit.fill,
-                              showFallback: false,
-                            ),
-                          ),
-                        ),
-                        Positioned.fill(
-                          child: CustomPaint(
-                            painter: SilhouettePainter(
-                              preset: preset,
-                              color: perfect ? AppTheme.mint : AppTheme.white,
-                              strokeWidth: perfect ? 4 : 3,
-                              fillOpacity: 0,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+      child: AnimatedOpacity(
+        opacity: visible ? 1 : 0,
+        duration: const Duration(milliseconds: 450),
+        curve: Curves.easeOut,
+        child: LayoutBuilder(
+          builder: (context, constraints) => Transform(
+            transform: motion.matrix(constraints.biggest, focal),
+            // 움직이는 동안 그림은 다시 그리지 않고 변환만 바꾼다
+            child: RepaintBoundary(
+              child: Stack(
+                children: _layers(
+                  SubjectTarget.fitFrame(
+                    constraints.biggest,
+                    preset.aspectRatio,
                   ),
                 ),
               ),
-              if (live != null)
-                Positioned.fill(
-                  child: CustomPaint(
-                    painter: LiveJointsPainter(
-                      live: live!,
-                      jointOk: match?.jointOk ?? const {},
-                      aspectRatio: preset.aspectRatio,
-                    ),
-                  ),
-                ),
-            ],
-          );
-        },
+            ),
+          ),
+        ),
       ),
     );
   }
-}
 
-/// 실시간으로 인식된 관절 점. 목표 위치 근처면 초록, 아니면 주황.
-class LiveJointsPainter extends CustomPainter {
-  const LiveJointsPainter({
-    required this.live,
-    required this.jointOk,
-    required this.aspectRatio,
-  });
-
-  final List<PoseLandmark> live;
-  final Map<int, bool> jointOk;
-  final double aspectRatio;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final frame = SilhouettePainter.frameRect(size, aspectRatio);
-    final outline = Paint()
-      ..color = AppTheme.scrim
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
-    for (final j in PoseMatcher.joints) {
-      if (j >= live.length || !live[j].isVisible) continue;
-      final c = Offset(
-        frame.left + live[j].x * frame.width,
-        frame.top + live[j].y * frame.height,
-      );
-      final ok = jointOk[j];
-      final color = ok == null
-          ? AppTheme.whiteMuted
-          : ok
-          ? AppTheme.mint
-          : AppTheme.coral;
-      canvas
-        ..drawCircle(c, 6, Paint()..color = color)
-        ..drawCircle(c, 6, outline);
+  List<Widget> _layers(Rect frame) {
+    if (preset.template case final template?) {
+      return [
+        Positioned.fill(
+          child: CustomPaint(
+            painter: TemplatePainter(
+              template: template,
+              color: AppTheme.white.withValues(alpha: opacity),
+              strokeWidth: 1.8,
+              // 보조선은 격자 층에서 촬영 직전까지 계속 보여 준다
+              showGuides: false,
+            ),
+          ),
+        ),
+      ];
     }
+    return [
+      Positioned.fromRect(
+        rect: frame,
+        child: Opacity(
+          opacity: opacity,
+          child: ReferenceImage(
+            preset: preset,
+            fit: BoxFit.fill,
+            showFallback: false,
+          ),
+        ),
+      ),
+      Positioned.fill(
+        child: CustomPaint(
+          painter: SilhouettePainter(
+            preset: preset,
+            color: AppTheme.white,
+            strokeWidth: 1.8,
+            fillOpacity: 0,
+          ),
+        ),
+      ),
+    ];
   }
-
-  @override
-  bool shouldRepaint(LiveJointsPainter old) =>
-      old.live != live ||
-      old.jointOk != jointOk ||
-      old.aspectRatio != aspectRatio;
 }

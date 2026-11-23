@@ -1,8 +1,10 @@
 import 'dart:math' as math;
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:likezzix/models/angle_spec.dart';
+import 'package:likezzix/models/angle_state.dart';
 import 'package:likezzix/models/attitude.dart';
-import 'package:likezzix/widgets/angle_indicator.dart';
+import 'package:likezzix/models/low_pass_filter.dart';
 
 const g = 9.81;
 
@@ -80,7 +82,8 @@ void main() {
           at(i),
         );
       }
-      expect(a.pitchDeg, closeTo(-20, 1));
+      // 손떨림 로우패스(0.09초) 지연만 남는다
+      expect(a.pitchDeg, inInclusiveRange(-20, -11));
     });
 
     test('반시계로 돌리면 roll +', () {
@@ -93,7 +96,7 @@ void main() {
         final r = 2.0 * i * deg;
         a = filter.addAccelerometer(g * math.sin(r), g * math.cos(r), 0, at(i));
       }
-      expect(a.rollDeg, closeTo(10, 1));
+      expect(a.rollDeg, inInclusiveRange(3, 10));
     });
 
     test('왼쪽으로 돌리면 yaw +, 멈추면 0으로 돌아옴', () {
@@ -128,68 +131,100 @@ void main() {
     expect((a.pitchDeg, a.rollDeg, a.yawDeg), (-10, 5, -3));
   });
 
-  group('AngleMatcher', () {
-    test('목표 범위 안이면 일치', () {
-      final guide = AngleMatcher().evaluate(tiltedUp(11), targetPitchDeg: -12);
-      expect(guide.matched, isTrue);
+  group('AngleStateMachine (사진 프리셋: -12° ± 3°)', () {
+    AngleStateMachine machine([double pitchDeg = -12]) =>
+        AngleStateMachine(AngleSpec.target(pitchDeg: pitchDeg));
+
+    test('범위 안이면 초록', () {
+      final guide = machine().add(tiltedUp(11));
+      expect(guide.state, AngleState.good);
       expect(guide.tilt, TiltHint.none);
     });
 
-    test('덜 기울였으면 위로 향하라고 안내', () {
-      final guide = AngleMatcher().evaluate(tiltedUp(0), targetPitchDeg: -12);
-      expect(guide.matched, isFalse);
+    test('덜 기울였으면 범위까지 남은 각도만큼 위로 향하라고 안내', () {
+      final guide = machine().add(tiltedUp(0));
+      expect(guide.state, AngleState.off);
       expect(guide.tilt, TiltHint.aimUp);
-      expect(
-        AngleStatus.message(guide, hasPreset: true).$2,
-        '카메라를 위로 12° 더 향하게',
-      );
+      expect(guide.pitchError, closeTo(9, 1e-6));
     });
 
     test('너무 위를 보면 아래로 안내', () {
-      final guide = AngleMatcher().evaluate(tiltedUp(25), targetPitchDeg: -12);
-      expect(guide.tilt, TiltHint.aimDown);
+      expect(machine().add(tiltedUp(25)).tilt, TiltHint.aimDown);
     });
 
     test('수평이 틀어지면 회전 안내', () {
-      final guide = AngleMatcher().evaluate(
-        tiltedUp(0, rollDeg: 6),
-        targetPitchDeg: 0,
-      );
+      final guide = machine(0).add(tiltedUp(0, rollDeg: 6));
       expect(guide.tilt, TiltHint.none);
       expect(guide.level, LevelHint.rotateClockwise);
     });
 
-    test('폰을 눕히면 수평 판단 없이 세우라는 안내', () {
-      final guide = AngleMatcher().evaluate(
-        Attitude.fromGravity(0.3, 0.2, g),
-        targetPitchDeg: 0,
-      );
+    test('폰을 눕히면 대기 + 세우라는 안내', () {
+      final guide = machine(0).add(Attitude.fromGravity(0.3, 0.2, g));
       expect(guide.upright, isFalse);
-      expect(guide.matched, isFalse);
+      expect(guide.state, AngleState.waiting);
       expect(guide.rollDelta, 0);
-      expect(AngleStatus.message(guide, hasPreset: false).$2, '폰을 세워서 들어 주세요');
+    });
+  });
+
+  group('히스테리시스 (전신: 위로 5~10°, 수평 ±3°)', () {
+    const spec = AngleSpec(elevationMin: 5, elevationMax: 10);
+    AngleState at(AngleStateMachine m, double up, [double roll = 0]) =>
+        m.add(tiltedUp(up, rollDeg: roll)).state;
+
+    test('경계에서 떨려도 초록이 한 번만 켜진다 (채터링 방지)', () {
+      final m = AngleStateMachine(spec);
+      var entries = 0;
+      var before = AngleState.off;
+      // 경계(5°)를 ±1.8° 폭으로 오가는 손떨림
+      for (var i = 0; i < 200; i++) {
+        final now = at(m, 5 + 1.8 * math.sin(i * 0.7));
+        if (now == AngleState.good && before != AngleState.good) entries++;
+        before = now;
+      }
+      expect(entries, 1);
     });
 
-    test('히스테리시스: 경계 근처에서 깜빡이지 않음', () {
-      final matcher = AngleMatcher();
-      expect(
-        matcher.evaluate(tiltedUp(12), targetPitchDeg: -12).matched,
-        isTrue,
-      );
-      // 진입 기준(3°)은 넘었지만 해제 기준(4.5°) 안
-      expect(
-        matcher.evaluate(tiltedUp(16), targetPitchDeg: -12).matched,
-        isTrue,
-      );
-      expect(
-        matcher.evaluate(tiltedUp(17), targetPitchDeg: -12).matched,
-        isFalse,
-      );
-      // 다시 들어올 때는 진입 기준 적용
-      expect(
-        matcher.evaluate(tiltedUp(16), targetPitchDeg: -12).matched,
-        isFalse,
-      );
+    test('이탈은 버퍼 2°를 넘어야, 재진입은 범위 안이어야', () {
+      final m = AngleStateMachine(spec);
+      expect(at(m, 4.5), AngleState.off);
+      expect(at(m, 6), AngleState.good);
+      expect(at(m, 3.2), AngleState.good); // 버퍼 안
+      expect(at(m, 11.9), AngleState.good);
+      expect(at(m, 2.8), AngleState.off);
+      expect(at(m, 4.5), AngleState.off); // 버퍼 구간에서는 재진입 안 됨
+      expect(at(m, 5.1), AngleState.good);
     });
+
+    test('수평도 같은 방식 (진입 3°, 이탈 4.5°)', () {
+      final m = AngleStateMachine(spec);
+      expect(at(m, 7, 3.5), AngleState.off);
+      expect(at(m, 7, 2.5), AngleState.good);
+      expect(at(m, 7, 4.2), AngleState.good);
+      expect(at(m, 7, 4.8), AngleState.off);
+    });
+  });
+
+  test('로우패스: 10Hz ±1° 손떨림을 1/4 아래로 줄이고 실제 이동은 따라간다', () {
+    final lpf = AngleLowPassFilter(const Duration(milliseconds: 90));
+    var peak = 0.0;
+    for (var i = 0; i < 200; i++) {
+      final v = lpf.add(math.sin(2 * math.pi * 10 * i * 0.02), 0.02);
+      if (i > 50) peak = math.max(peak, v.abs());
+    }
+    expect(peak, lessThan(0.25));
+
+    final step = AngleLowPassFilter(const Duration(milliseconds: 90))
+      ..add(0, 0);
+    late double v;
+    for (var i = 0; i < 15; i++) {
+      v = step.add(10, 0.02);
+    }
+    expect(v, greaterThan(9.5)); // 0.3초 안에 95%
+  });
+
+  test('로우패스: ±180° 경계에서 짧은 쪽으로', () {
+    final lpf = AngleLowPassFilter(const Duration(milliseconds: 90))
+      ..add(179, 0);
+    expect(lpf.add(-179, 0.02), greaterThan(179));
   });
 }

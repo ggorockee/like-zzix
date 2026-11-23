@@ -139,7 +139,7 @@ func New(holder *catalog.Holder, opt Options) *fiber.App {
 			default:
 				m.AppEvent(e.Name, platform, e.Count)
 				// Per-preset funnel only for known presets (bounded labels).
-				if telemetry.PresetEvents[e.Name] && catalog.Has(e.Preset) {
+				if telemetry.PresetEvents[e.Name] && (catalog.Has(e.Preset) || telemetry.TemplateIDs[e.Preset]) {
 					m.PresetEvent(e.Name, e.Preset, e.Count)
 				}
 				accepted++

@@ -1,17 +1,13 @@
 import 'dart:math' as math;
 import 'dart:ui';
 
-import 'package:flutter/rendering.dart' show Matrix4, MatrixUtils;
 import 'package:flutter/foundation.dart';
+import 'package:flutter/rendering.dart' show Matrix4;
 
-import 'preset.dart';
-
-/// 목표 각도에서 벗어난 만큼 레퍼런스 가이드를 움직이는 양 (도 단위, 0이면 프레임에 고정).
+/// 권장 각도 범위를 벗어난 만큼 가이드를 움직이는 양 (도 단위, 0이면 프레임에 고정).
 ///
 /// 카메라를 제자리에서 돌리면 실제 장면은 화면에서 회전 호모그래피만큼 움직인다.
-/// 가이드에 같은 변환을 적용하면 가이드가 공간에 붙어 있는 것처럼 보인다.
-/// - 사람 ↔ 가이드 차이 = 서 있는 위치·거리·포즈가 틀림
-/// - 가이드 ↔ 프레임 차이 = 폰 각도가 틀림
+/// 고스트 가이드에 같은 변환을 적용하면 공간에 붙어 있는 것처럼 보인다.
 @immutable
 class GuideMotion {
   const GuideMotion({
@@ -43,7 +39,7 @@ class GuideMotion {
   bool get isStill => pitchDeg == 0 && rollDeg == 0 && yawDeg == 0;
 
   /// 더 벌어져도 가이드가 화면에 남아 방향을 알려 주도록 하는 표시 한계
-  static const maxTiltDeg = 25.0;
+  static const maxTiltDeg = 15.0;
   static const maxRollDeg = 45.0;
 
   /// 일반 휴대폰 기본 카메라(35mm 환산 약 26mm)의 초점거리 ÷ 세로 화각 길이
@@ -111,34 +107,6 @@ class GuideMotion {
     );
   }
 
-  /// 프레임 정규화 좌표의 레퍼런스 관절을, 움직인 가이드 위치로 옮긴다.
-  List<PoseLandmark> displace(
-    List<PoseLandmark> landmarks, {
-    required Size screen,
-    required Rect frame,
-    required double focal,
-  }) {
-    if (isStill) return landmarks;
-    final m = matrix(screen, focal);
-    return [
-      for (final l in landmarks)
-        () {
-          final p = MatrixUtils.transformPoint(
-            m,
-            Offset(
-              frame.left + l.x * frame.width,
-              frame.top + l.y * frame.height,
-            ),
-          );
-          return PoseLandmark(
-            (p.dx - frame.left) / frame.width,
-            (p.dy - frame.top) / frame.height,
-            l.likelihood,
-          );
-        }(),
-    ];
-  }
-
   @override
   bool operator ==(Object other) =>
       other is GuideMotion &&
@@ -153,8 +121,8 @@ class GuideMotion {
 
 /// 각도 안내 값을 부드러운 [GuideMotion]으로 바꾼다.
 class GuideMotionFilter {
-  /// 값이 들어올 때마다 목표로 다가가는 비율 (약 50Hz 기준 0.06초)
-  static const _follow = 0.3;
+  /// 값이 들어올 때마다 목표로 다가가는 비율 (약 50Hz 기준 0.035초)
+  static const _follow = 0.45;
 
   /// 좌우 회전이 이 안이면 고정, 밖이면 해제 (경계에서 깜빡이지 않게 다르게 둠)
   static const yawLockDeg = 2.0;
@@ -164,8 +132,8 @@ class GuideMotionFilter {
 
   GuideMotion add({
     required bool angleMatched,
-    required double pitchDelta,
-    required double rollDelta,
+    required double pitchError,
+    required double rollError,
     required double yawDeg,
   }) {
     final last = _last;
@@ -183,11 +151,11 @@ class GuideMotionFilter {
     return _last = GuideMotion(
       pitchDeg: step(
         last?.pitchDeg,
-        locked ? 0 : pitchDelta.clamp(-tilt, tilt).toDouble(),
+        locked ? 0 : pitchError.clamp(-tilt, tilt).toDouble(),
       ),
       rollDeg: step(
         last?.rollDeg,
-        locked ? 0 : rollDelta.clamp(-roll, roll).toDouble(),
+        locked ? 0 : rollError.clamp(-roll, roll).toDouble(),
       ),
       yawDeg: step(
         last?.yawDeg,

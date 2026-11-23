@@ -4,6 +4,7 @@ import '../core/app_theme.dart';
 import '../core/env.dart';
 import '../models/preset.dart';
 import 'silhouette_painter.dart';
+import 'template_painter.dart';
 
 /// 프리셋 레퍼런스 사진. 사진이 없는 빌드(공개 저장소 clone 등)에서는 실루엣으로 대체.
 class ReferenceImage extends StatelessWidget {
@@ -24,15 +25,26 @@ class ReferenceImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (preset.template case final template?) {
+      return CustomPaint(
+        size: Size.infinite,
+        painter: TemplatePainter(
+          template: template,
+          color: AppTheme.white,
+          strokeWidth: silhouetteStroke,
+          showLabels: false,
+        ),
+      );
+    }
     final Widget fallback = !showFallback
         ? const SizedBox.shrink()
         : CustomPaint(
             size: Size.infinite,
             painter: SilhouettePainter(
-              preset: preset,
+              // 아래에서 통째로 뒤집으므로 원래 방향으로 그린다
+              preset: preset.mirrored ? preset.flipped : preset,
               color: AppTheme.white,
               strokeWidth: silhouetteStroke,
-              glow: false,
               fillOpacity: 0.15,
             ),
           );
@@ -48,14 +60,16 @@ class ReferenceImage extends StatelessWidget {
           );
     // 관리자 콘솔에서 올린 사진이 있으면 우선 사용, 못 받으면 번들 사진 → 실루엣
     final url = resolveReferenceUrl(preset.referenceUrl, Env.apiBaseUrl);
-    if (url == null) return local;
-    return Image.network(
-      url,
-      fit: fit,
-      cacheWidth: 540,
-      gaplessPlayback: true,
-      errorBuilder: (context, error, stackTrace) => local,
-    );
+    final Widget image = url == null
+        ? local
+        : Image.network(
+            url,
+            fit: fit,
+            cacheWidth: 540,
+            gaplessPlayback: true,
+            errorBuilder: (context, error, stackTrace) => local,
+          );
+    return preset.mirrored ? Transform.flip(flipX: true, child: image) : image;
   }
 }
 

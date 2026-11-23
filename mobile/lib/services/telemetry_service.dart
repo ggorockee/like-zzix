@@ -17,7 +17,10 @@ enum AppEvent {
   updatePromptShown('update_prompt_shown'),
   forceUpdateShown('force_update_shown'),
   updateAccepted('update_accepted'),
-  updateDismissed('update_dismissed');
+  updateDismissed('update_dismissed'),
+  guideLocked('guide_locked'),
+  autoCaptured('auto_captured'),
+  volumeCaptured('volume_captured');
 
   const AppEvent(this.wireName);
 

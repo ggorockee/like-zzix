@@ -10,15 +10,21 @@ class ZoomSelector extends StatelessWidget {
     required this.range,
     required this.zoom,
     required this.onSelected,
+    this.maxStop = ZoomRange.appMax,
   });
 
+  /// 이 배율까지만 보여준다 (잠금 중에는 0.5·1·2배)
+  final double maxStop;
   final ZoomRange range;
   final double zoom;
   final ValueChanged<double> onSelected;
 
   @override
   Widget build(BuildContext context) {
-    final stops = range.availableStops;
+    final stops = [
+      for (final s in range.availableStops)
+        if (s <= maxStop) s,
+    ];
     if (stops.length < 2) return const SizedBox(height: 40);
     final active = range.activeStop(zoom);
     return Container(
