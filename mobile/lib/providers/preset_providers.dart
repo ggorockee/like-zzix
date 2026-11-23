@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/preset.dart';
 import '../services/preset_repository.dart';
@@ -82,20 +85,51 @@ final activePresetProvider = Provider<Preset?>((ref) {
   return ref.watch(guideMirrorProvider) ? preset?.flipped : preset;
 });
 
-/// 가이드 투명도 (0.1~1.0). 기본값은 사진 40%, 구도선 90%.
+/// 가이드 진하기 (0~1). 기본값은 실루엣 12%(아주 흐리게), 사진 40%.
+/// 사용자가 바꾸면 종류별로 저장해 다음에도 쓴다.
 final overlayOpacityProvider = NotifierProvider<OverlayOpacityNotifier, double>(
   OverlayOpacityNotifier.new,
 );
 
 class OverlayOpacityNotifier extends Notifier<double> {
-  static const min = 0.1;
+  static const min = 0.0;
   static const max = 1.0;
+  static const silhouetteDefault = 0.12;
+  static const photoDefault = 0.4;
+
+  static String _key(bool isTemplate) =>
+      isTemplate ? 'silhouette_opacity' : 'photo_opacity';
 
   @override
-  double build() =>
-      ref.watch(selectedPresetProvider.select((p) => p?.isTemplate ?? false))
-      ? 0.9
-      : 0.4;
+  double build() {
+    final isTemplate = ref.watch(
+      selectedPresetProvider.select((p) => p?.isTemplate ?? true),
+    );
+    unawaited(_restore(isTemplate));
+    return isTemplate ? silhouetteDefault : photoDefault;
+  }
 
-  void set(double value) => state = value.clamp(min, max);
+  Future<void> _restore(bool isTemplate) async {
+    try {
+      final store = await SharedPreferences.getInstance();
+      final saved = store.getDouble(_key(isTemplate));
+      if (saved != null && ref.mounted) state = saved.clamp(min, max);
+    } on Object catch (e) {
+      debugPrint('[Opacity] 저장 값 읽기 실패: $e');
+    }
+  }
+
+  void set(double value) {
+    state = value.clamp(min, max);
+    final isTemplate = ref.read(selectedPresetProvider)?.isTemplate ?? true;
+    unawaited(
+      SharedPreferences.getInstance().then(
+        (s) => s.setDouble(_key(isTemplate), state),
+        onError: (Object e) {
+          debugPrint('[Opacity] 저장 실패: $e');
+          return false;
+        },
+      ),
+    );
+  }
 }

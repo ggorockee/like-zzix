@@ -216,6 +216,40 @@ abstract final class CompositionPainter {
     );
   }
 
+  /// 카메라 위에 흐리게 겹치는 인물 실루엣: 옅은 면 + 조금 진한 외곽선.
+  /// 사진 속 윤곽이 있으면 그 모양, 없으면 간단한 사람 모양. 겹쳐도 진해지지 않게 한 층에 그린다.
+  static void silhouette(
+    Canvas canvas,
+    Size size,
+    CompositionTemplate template,
+    List<Target> targets, {
+    required Color color,
+    required double opacity,
+  }) {
+    if (opacity <= 0 || targets.isEmpty) return;
+    canvas.saveLayer(
+      Offset.zero & size,
+      Paint()..color = AppTheme.white.withValues(alpha: opacity),
+    );
+    final fill = Paint()..color = color.withValues(alpha: 0.55);
+    if (template.silhouette.isEmpty) {
+      people(canvas, size, template, fill);
+    } else {
+      final line = Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2
+        ..strokeJoin = StrokeJoin.round;
+      for (final poly in template.silhouetteIn(size, targets.first.center)) {
+        final path = GuideStroke.smooth(poly, closed: true);
+        canvas
+          ..drawPath(path, fill)
+          ..drawPath(path, line);
+      }
+    }
+    canvas.restore();
+  }
+
   /// 구도 안의 사람들을 그린다 (카드 도식·일러스트 공용).
   static void people(
     Canvas canvas,

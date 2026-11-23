@@ -190,3 +190,15 @@ func scrape(t *testing.T, m *telemetry.Metrics) string {
 	_, body := do(t, NewMetricsApp(m), httptest.NewRequest(http.MethodGet, "/metrics", nil))
 	return body
 }
+
+func TestAppAdsTxtAndRoot(t *testing.T) {
+	app, _, _ := newTestApp(t)
+	res, body := do(t, app, httptest.NewRequest(http.MethodGet, "/app-ads.txt", nil))
+	if res.StatusCode != 200 || body != "google.com, pub-8516861197467665, DIRECT, f08c47fec0942fa0\n" ||
+		!strings.HasPrefix(res.Header.Get("Content-Type"), "text/plain") {
+		t.Fatalf("app-ads.txt: %d %q", res.StatusCode, body)
+	}
+	if res, _ := do(t, app, httptest.NewRequest(http.MethodGet, "/", nil)); res.StatusCode != 302 || res.Header.Get("Location") != "/support" {
+		t.Fatalf("root: %d %s", res.StatusCode, res.Header.Get("Location"))
+	}
+}

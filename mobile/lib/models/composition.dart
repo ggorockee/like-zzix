@@ -16,6 +16,7 @@ class CompositionTemplate {
     required this.subjects,
     this.scene = 'plain',
     this.hasPhoto = false,
+    this.silhouette = const [],
   });
 
   factory CompositionTemplate.fromJson(Map<String, dynamic> json) {
@@ -32,6 +33,10 @@ class CompositionTemplate {
       subjects: subjects,
       scene: json['scene'] as String? ?? 'plain',
       hasPhoto: json['photo'] as bool? ?? false,
+      silhouette: [
+        for (final p in json['silhouette'] as List<dynamic>? ?? const [])
+          [for (final q in p as List<dynamic>) _point(q)],
+      ],
     );
   }
 
@@ -44,11 +49,42 @@ class CompositionTemplate {
   /// 예시 사진을 관리자 콘솔에서 관리하는 구도 (`PresetRepository.merge`)
   final bool hasPhoto;
 
+  /// 예시 사진 속 인물 윤곽 (4:3 뷰파인더 기준 0~1, 사람마다 하나).
+  /// 비어 있으면 간단한 사람 모양을 그린다.
+  final List<List<Offset>> silhouette;
+
+  /// 윤곽을 만든 화면 비율 (가로/세로)
+  static const silhouetteAspect = 3 / 4;
+
+  /// 윤곽을 [size] 좌표로. 화면 비율이 달라도 찌그러지지 않게 높이에 맞춰 같은 배율로 옮기고,
+  /// 첫 인물의 자리([anchorPx])에 맞춘다.
+  List<List<Offset>> silhouetteIn(Size size, Offset anchorPx) {
+    final s = subjects.first;
+    final anchor = switch (s) {
+      FaceSpec() => s.anchor,
+      BodySpec() => Offset.lerp(s.head, s.bottom, 0.5)!,
+    };
+    return [
+      for (final poly in silhouette)
+        [
+          for (final p in poly)
+            anchorPx +
+                Offset(
+                  (p.dx - anchor.dx) * silhouetteAspect * size.height,
+                  (p.dy - anchor.dy) * size.height,
+                ),
+        ],
+    ];
+  }
+
   CompositionTemplate get mirrored => CompositionTemplate(
     elements: [for (final e in elements) e.mirrored],
     subjects: [for (final s in subjects) s.mirrored],
     scene: scene,
     hasPhoto: hasPhoto,
+    silhouette: [
+      for (final poly in silhouette) [for (final p in poly) _mirror(p)],
+    ],
   );
 }
 

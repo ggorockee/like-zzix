@@ -2,7 +2,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/ad_flags.dart';
 import '../services/ad_service.dart';
+import '../services/save_ad_controller.dart';
 import '../services/app_initializer.dart';
+import '../services/telemetry_service.dart';
+import 'api_providers.dart';
 
 /// 앱 초기화(Firebase → Crashlytics → Remote Config). 스플래시 화면이 이 작업을 기다린다.
 final appInitProvider = FutureProvider<AppBootstrap>((ref) => initializeApp());
@@ -21,7 +24,20 @@ final adFlagsProvider = Provider<AdFlags>(
 
 /// 플래그가 바뀌면 이전 AdService는 dispose되어 미리 로드된 광고도 폐기된다.
 final adServiceProvider = Provider<AdService>((ref) {
-  final service = AdService(flags: ref.watch(adFlagsProvider));
+  final service = AdService(
+    flags: ref.watch(adFlagsProvider),
+    onLoadFailed: () =>
+        ref.read(telemetryProvider)?.record(AppEvent.adLoadFailed),
+  );
   ref.onDispose(service.dispose);
   return service;
 });
+
+/// 저장 N회마다 전면 광고. 촬영을 방해하지 않도록 잠금 중에는 미뤘다가 잠금을 풀 때 보여 준다.
+final saveAdProvider = Provider<SaveAdController>(
+  (ref) => SaveAdController(
+    ads: ref.watch(adServiceProvider),
+    onShown: () =>
+        ref.read(telemetryProvider)?.record(AppEvent.adInterstitialShown),
+  ),
+);

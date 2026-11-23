@@ -39,6 +39,9 @@ type eventsRequest struct {
 	} `json:"events"`
 }
 
+// appAdsTxt must match the AdMob publisher (woohalabs.com/app-ads.txt).
+const appAdsTxt = "google.com, pub-8516861197467665, DIRECT, f08c47fec0942fa0\n"
+
 //go:embed privacy.html
 var privacyHTML []byte
 
@@ -77,6 +80,13 @@ func New(holder *catalog.Holder, opt Options) *fiber.App {
 		mountAdmin(app, holder, m, opt.Log, opt.Admin)
 	}
 
+	// 스토어에 적은 개발자 사이트 주소로 들어오면 고객지원 페이지로
+	app.Get("/", func(c *fiber.Ctx) error { return c.Redirect("/support", fiber.StatusFound) })
+	// AdMob 크롤러용: 이 앱의 광고 판매자 (게시자 ID는 공개 정보)
+	app.Get("/app-ads.txt", func(c *fiber.Ctx) error {
+		c.Set(fiber.HeaderContentType, "text/plain; charset=utf-8")
+		return c.SendString(appAdsTxt)
+	})
 	app.Get("/healthz", func(c *fiber.Ctx) error { return c.SendString("ok") })
 	// Presets are embedded and validated at startup, so readiness only means "serving".
 	app.Get("/readyz", func(c *fiber.Ctx) error { return c.SendString("ok") })

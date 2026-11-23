@@ -60,7 +60,9 @@ void main() {
     expect(find.byTooltip('갤러리'), findsOneWidget);
     expect(find.bySemanticsLabel('촬영'), findsOneWidget);
     // 카메라가 없으면 렌즈 전환 비활성
-    final lens = tester.widget<IconButton>(find.byType(IconButton));
+    final lens = tester.widget<IconButton>(
+      find.widgetWithIcon(IconButton, Icons.cameraswitch_outlined),
+    );
     expect(lens.onPressed, isNull);
   });
 }

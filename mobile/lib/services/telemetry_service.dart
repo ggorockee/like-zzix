@@ -20,7 +20,10 @@ enum AppEvent {
   updateDismissed('update_dismissed'),
   guideLocked('guide_locked'),
   autoCaptured('auto_captured'),
-  volumeCaptured('volume_captured');
+  volumeCaptured('volume_captured'),
+  adNativeShown('ad_native_shown'),
+  adInterstitialShown('ad_interstitial_shown'),
+  adLoadFailed('ad_load_failed');
 
   const AppEvent(this.wireName);
 

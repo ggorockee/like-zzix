@@ -122,6 +122,7 @@ PRD 지정 4개 폴더(`screens`, `services`, `widgets`, `models`)를 유지하�
 | 선택 | [도식 / 예시] 카드. 사진은 관리자 콘솔 또는 번들에서 같은 id로 합침, 없으면 데이터로 그린 일러스트 | `widgets/composition_card.dart`, `preset_bottom_sheet.dart` |
 | 인식 | 얼굴 구도는 얼굴 인식(여러 명·고개 방향), 전신 구도는 포즈 인식. 필요한 것만, 사람이 없으면 약 5fps | `services/vision_service.dart` |
 | 판정 | 자리마다 사람 배정 → 위치·크기·시선 오차 ÷ 허용 오차. 모두 1 이하면 90점. 90점 진입·86점 이탈, 0.25초 유지 | `models/composition_fit.dart`, `providers/composition_providers.dart` |
+| 실루엣 | 예시 사진 속 인물 윤곽(`silhouette`, 4:3 기준 0~1)을 흐리게 겹침. 기본 12%, 위쪽 슬라이더로 0~100% 조절·저장, 완성되면 함께 사라짐. 사진이 없는 구도는 간단한 사람 모양 | `CompositionPainter.silhouette` |
 | 코칭 | 사람 찾기 → 잘림 → 거리(걸음 수) → 폰 각도 → 위치 → 시선 순으로 한 문장. 여러 명이면 "왼쪽 분, 조금 더 높게" | `models/coach.dart` |
 | 화면 | 조건별 초록 반응, 자석 스냅(55~90점), 완성 시 전체 초록 + 진동 1회 → 0.3초 뒤 10%로 투명 + 얇은 테두리 | `widgets/composition_painter.dart`, `dynamic_frame.dart` |
 

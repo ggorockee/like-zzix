@@ -122,6 +122,45 @@ void main() {
     expect(presets.map((p) => p.title), isNot(contains('실루엣')));
   });
 
+  group('실루엣', () {
+    test('사진 있는 구도는 인물 윤곽이 있고, 2인은 두 명', () {
+      for (final p in presets.where((p) => p.template!.hasPhoto)) {
+        final polys = p.template!.silhouette;
+        expect(polys, isNotEmpty, reason: p.id);
+        expect(polys.every((e) => e.length >= 12), isTrue, reason: p.id);
+      }
+      expect(of('cmp-two-depth').silhouette.length, 2);
+    });
+
+    test('윤곽이 인물 자리를 감싸고, 어느 비율에서도 찌그러지지 않는다', () {
+      for (final p in presets.where((p) => p.template!.hasPhoto)) {
+        double? shape;
+        for (final a in ViewfinderAspect.values) {
+          final finder = Size(360, 360 / a.ratio);
+          final target = Target.of(p, finder).first;
+          final poly = p.template!.silhouetteIn(finder, target.center).first;
+          final box = Rect.fromLTRB(
+            poly.map((e) => e.dx).reduce((x, y) => x < y ? x : y),
+            poly.map((e) => e.dy).reduce((x, y) => x < y ? x : y),
+            poly.map((e) => e.dx).reduce((x, y) => x > y ? x : y),
+            poly.map((e) => e.dy).reduce((x, y) => x > y ? x : y),
+          );
+          expect(box.contains(target.center), isTrue, reason: '${p.id} $a');
+          shape ??= box.width / box.height;
+          expect(box.width / box.height, closeTo(shape, 1e-6), reason: p.id);
+        }
+      }
+    });
+
+    test('반전', () {
+      final t = of('cmp-thirds');
+      expect(
+        t.mirrored.silhouette.first.first.dx,
+        closeTo(1 - t.silhouette.first.first.dx, 1e-9),
+      );
+    });
+  });
+
   group('사진 병합', () {
     final bundled = PresetRepository.parse(
       File(PresetRepository.bundledAsset).readAsStringSync(),

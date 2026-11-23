@@ -41,4 +41,19 @@ class AdConsentService {
       await AppTrackingTransparency.requestTrackingAuthorization();
     }
   }
+
+  /// 광고 동의를 다시 바꿀 수 있어야 하는 지역(EEA 등)인지. 정보 화면에서 메뉴를 보여 줄 때 쓴다.
+  static Future<bool> privacyOptionsRequired() async {
+    try {
+      return await ConsentInformation.instance
+              .getPrivacyOptionsRequirementStatus() ==
+          PrivacyOptionsRequirementStatus.required;
+    } on Object catch (e) {
+      debugPrint('[UMP] 상태 확인 실패: $e');
+      return false;
+    }
+  }
+
+  static Future<void> showPrivacyOptions() =>
+      ConsentForm.showPrivacyOptionsForm((_) {});
 }

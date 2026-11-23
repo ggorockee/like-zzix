@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 import '../core/ad_unit_ids.dart';
+import '../core/app_theme.dart';
 import '../models/ad_flags.dart';
 import 'ad_consent_service.dart';
 
@@ -23,10 +24,14 @@ class AdService {
     required this.flags,
     AdsInitializer? initializer,
     AdUnitIdResolver? adUnitIdResolver,
+    this.onLoadFailed,
   }) : _initializer = initializer ?? _defaultInitializer,
        _adUnitId = adUnitIdResolver ?? AdUnitIds.of;
 
   final AdFlags flags;
+
+  /// 광고 로드 실패를 지표로 남길 때
+  final void Function()? onLoadFailed;
   final AdsInitializer _initializer;
   final AdUnitIdResolver _adUnitId;
 
@@ -53,7 +58,7 @@ class AdService {
   }
 
   // ---------------------------------------------------------------------------
-  // Native (프리셋 그리드 5번째 칸)
+  // Native (구도 목록 중간)
   // ---------------------------------------------------------------------------
 
   /// 네이티브 광고를 로드해 반환. 비활성/실패 시 null → 호출부는 기본 프리셋 UI 사용.
@@ -69,11 +74,24 @@ class AdService {
     final ad = NativeAd(
       adUnitId: unitId,
       request: const AdRequest(),
-      nativeTemplateStyle: NativeTemplateStyle(templateType: templateType),
+      nativeTemplateStyle: NativeTemplateStyle(
+        templateType: templateType,
+        mainBackgroundColor: AppTheme.inkRaised,
+        cornerRadius: 12,
+        callToActionTextStyle: NativeTemplateTextStyle(
+          textColor: AppTheme.ink,
+          backgroundColor: AppTheme.coral,
+        ),
+        primaryTextStyle: NativeTemplateTextStyle(textColor: AppTheme.white),
+        secondaryTextStyle: NativeTemplateTextStyle(
+          textColor: AppTheme.whiteMuted,
+        ),
+      ),
       listener: NativeAdListener(
         onAdLoaded: (ad) => completer.complete(ad as NativeAd),
         onAdFailedToLoad: (ad, error) {
           debugPrint('[Ads] native 로드 실패: ${error.message}');
+          onLoadFailed?.call();
           ad.dispose();
           completer.complete(null);
         },
@@ -110,6 +128,7 @@ class AdService {
         onAdFailedToLoad: (error) {
           _interstitialLoading = false;
           debugPrint('[Ads] interstitial 로드 실패: ${error.message}');
+          onLoadFailed?.call();
         },
       ),
     );

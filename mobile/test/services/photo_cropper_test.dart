@@ -29,6 +29,18 @@ void main() {
     expect(result.exif.imageIfd.orientation ?? 1, 1);
   });
 
+  test('이미 같은 비율이면 다시 인코딩하지 않고 원본 그대로', () async {
+    final dir = Directory.systemTemp.createTempSync('crop');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final path = '${dir.path}/b.jpg';
+    // 가로 4:3 픽셀 + 90° 회전 = 세로 3:4
+    final source = img.Image(width: 160, height: 120)
+      ..exif.imageIfd.orientation = 6;
+    File(path).writeAsBytesSync(img.encodeJpg(source));
+    expect(await PhotoCropper.crop(path, 3 / 4), path);
+    expect(await PhotoCropper.crop(path, 1), isNot(path));
+  });
+
   test('자르지 못하면 원본 경로', () async {
     expect(await PhotoCropper.crop('/없는/파일.jpg', 1), '/없는/파일.jpg');
   });
