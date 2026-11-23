@@ -4,7 +4,6 @@ import '../core/app_theme.dart';
 import '../core/env.dart';
 import '../models/preset.dart';
 import 'silhouette_painter.dart';
-import 'template_painter.dart';
 
 /// 프리셋 레퍼런스 사진. 사진이 없는 빌드(공개 저장소 clone 등)에서는 실루엣으로 대체.
 class ReferenceImage extends StatelessWidget {
@@ -25,17 +24,6 @@ class ReferenceImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (preset.template case final template?) {
-      return CustomPaint(
-        size: Size.infinite,
-        painter: TemplatePainter(
-          template: template,
-          color: AppTheme.white,
-          strokeWidth: silhouetteStroke,
-          showLabels: false,
-        ),
-      );
-    }
     final Widget fallback = !showFallback
         ? const SizedBox.shrink()
         : CustomPaint(

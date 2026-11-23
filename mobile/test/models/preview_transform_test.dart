@@ -4,7 +4,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import 'package:likezzix/models/preview_transform.dart';
-import 'package:likezzix/services/pose_service.dart';
+import 'package:likezzix/services/vision_service.dart';
 import 'package:likezzix/widgets/silhouette_painter.dart';
 
 void main() {
@@ -32,9 +32,9 @@ void main() {
     });
   });
 
-  group('PoseService.normalize (ML Kit 예제 규칙)', () {
+  group('VisionService.normalize (ML Kit 예제 규칙)', () {
     test('Android 후면(90°): 회전된 이미지 크기로 정규화', () {
-      final n = PoseService.normalize(
+      final n = VisionService.normalize(
         const Offset(180, 960),
         imageSize: const Size(1280, 720),
         rotation: InputImageRotation.rotation90deg,
@@ -46,7 +46,7 @@ void main() {
     });
 
     test('Android 전면(270°): 프리뷰처럼 좌우반전', () {
-      final n = PoseService.normalize(
+      final n = VisionService.normalize(
         const Offset(180, 960),
         imageSize: const Size(1280, 720),
         rotation: InputImageRotation.rotation270deg,
@@ -59,11 +59,11 @@ void main() {
 
     test('센서 방향 → 입력 회전값', () {
       expect(
-        PoseService.imageRotation(sensorOrientation: 90),
+        VisionService.imageRotation(sensorOrientation: 90),
         InputImageRotation.rotation90deg,
       );
       expect(
-        PoseService.imageRotation(sensorOrientation: 270),
+        VisionService.imageRotation(sensorOrientation: 270),
         InputImageRotation.rotation270deg,
       );
     });

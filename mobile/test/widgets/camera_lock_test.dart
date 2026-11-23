@@ -43,7 +43,9 @@ void main() {
         child: const MaterialApp(home: CameraScreen()),
       ),
     );
-    container.read(selectedPresetProvider.notifier).toggle(templates.first);
+    container
+        .read(selectedPresetProvider.notifier)
+        .toggle(templates.firstWhere((t) => t.id == 'cmp-full-body'));
     await tester.pump();
     // 고스트 표시 시간(2초)이 끝난 상태
     await tester.pump(const Duration(milliseconds: 2100));
@@ -96,7 +98,7 @@ void main() {
   });
 
   testWidgets('사람이 없으면 각도가 맞아도 셔터 링이 초록이 아니다', (tester) async {
-    // 전신 템플릿 권장 각도(위로 5~10°) 안
+    // 전신 구도 권장 각도(위로 5~10°) 안
     final container = await pumpCamera(
       tester,
       attitude: Stream.value(const Attitude(-7, 0)),

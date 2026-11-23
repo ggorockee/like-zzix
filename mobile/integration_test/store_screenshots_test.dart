@@ -8,11 +8,13 @@ import 'package:go_router/go_router.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:likezzix/app.dart';
 import 'package:likezzix/models/attitude.dart';
+import 'package:likezzix/models/composition.dart';
+import 'package:likezzix/models/composition_fit.dart';
 import 'package:likezzix/models/preset.dart';
 import 'package:likezzix/models/subject.dart';
 import 'package:likezzix/providers/attitude_providers.dart';
 import 'package:likezzix/providers/camera_providers.dart';
-import 'package:likezzix/providers/subject_providers.dart';
+import 'package:likezzix/providers/composition_providers.dart';
 import 'package:likezzix/providers/preset_providers.dart';
 import 'package:likezzix/screens/camera_screen.dart';
 import 'package:likezzix/services/preset_repository.dart';
@@ -53,7 +55,7 @@ void main() {
           ],
         ),
         availableCamerasProvider.overrideWith((ref) async => const []),
-        subjectClockProvider.overrideWithValue(() => now),
+        visionClockProvider.overrideWithValue(() => now),
         attitudeProvider.overrideWith((ref) {
           final preset = ref.watch(selectedPresetProvider);
           return Stream.periodic(
@@ -86,22 +88,37 @@ void main() {
     /// 사람이 화면에 있는 상태를 만든다. [scale]은 목표 대비 크기, [shift]는 위치 차이.
     Future<void> person({double scale = 1, Offset shift = Offset.zero}) async {
       final finder = tester.getSize(find.byType(DynamicFrame));
-      final target = SubjectTarget.of(
-        container.read(selectedPresetProvider)!,
-        finder,
-      )!;
-      final center =
-          target.subject[BodyAnchor.hips] ??
-          target.subject[BodyAnchor.shoulders]!;
-      final live = Subject({
-        for (final e in target.subject.points.entries)
-          e.key: center + (e.value - center) * scale + shift,
-      }, halfWidth: target.subject.halfWidth * scale);
+      final targets = Target.of(container.read(activePresetProvider)!, finder);
+      final people = [
+        for (final t in targets)
+          switch (t) {
+            FaceTarget() => LivePerson.face(
+              Rect.fromCenter(
+                center: t.center + shift,
+                width: t.box.width * scale,
+                height: t.box.height * scale,
+              ),
+              yawDeg: switch (t.gaze) {
+                Gaze.left => -25,
+                Gaze.right => 25,
+                null => 0,
+              },
+            ),
+            BodyTarget() => LivePerson.body(
+              BodyPoints({
+                BodyAnchor.head: t.center + (t.head - t.center) * scale + shift,
+                BodyAnchor.shoulders: t.center + shift,
+                t.span: t.center + (t.bottom - t.center) * scale + shift,
+              }, halfWidth: t.halfWidth * scale),
+              t.span,
+            ),
+          },
+      ];
       for (var i = 0; i < 15; i++) {
         now = now.add(const Duration(milliseconds: 100));
         container
-            .read(subjectProvider.notifier)
-            .update(live, target, focal: finder.height);
+            .read(compositionProvider.notifier)
+            .update(people, targets, focal: finder.height);
       }
       await _settle(tester);
     }
@@ -112,8 +129,10 @@ void main() {
     await person();
     await binding.takeScreenshot('01_perfect_match');
 
-    // 2. 구도 프리셋 목록
+    // 2. 구도 목록 ([도식 | 예시] 카드)
     showPresetBottomSheet(tester.element(find.byType(CameraScreen)));
+    await _settle(tester);
+    await tester.tap(find.text(PresetCategory.travel.label));
     await _settle(tester);
     await binding.takeScreenshot('02_presets');
     Navigator.of(tester.element(find.byType(PresetBottomSheet))).pop();

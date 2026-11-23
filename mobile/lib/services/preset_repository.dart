@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../models/preset.dart';
 
-/// 앱 번들에 든 실루엣 템플릿과 사진 프리셋.
+/// 앱 번들에 든 벡터 구도 템플릿과 사진 프리셋.
 class PresetRepository {
   PresetRepository([AssetBundle? bundle]) : _bundle = bundle ?? rootBundle;
 
@@ -13,9 +13,9 @@ class PresetRepository {
 
   final AssetBundle _bundle;
 
-  static const templatesAsset = 'assets/templates/templates.json';
+  static const templatesAsset = 'assets/templates/compositions.json';
 
-  /// 상황별 실루엣 템플릿 (앱에 항상 포함)
+  /// 벡터 구도 템플릿 (앱에 항상 포함)
   Future<List<Preset>> loadTemplates() async =>
       parseTemplates(await _bundle.loadString(templatesAsset));
 

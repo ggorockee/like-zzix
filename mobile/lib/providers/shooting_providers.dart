@@ -6,8 +6,8 @@ import '../models/viewfinder_aspect.dart';
 import '../services/telemetry_service.dart';
 import 'api_providers.dart';
 import 'attitude_providers.dart';
+import 'composition_providers.dart';
 import 'preset_providers.dart';
-import 'subject_providers.dart';
 
 /// 촬영 신호. 셔터 링 색·진동·자동 촬영이 이 값 하나를 따른다.
 /// 초록([ready])은 **사람의 크기·위치와 폰 각도가 모두 맞을 때만** 켜진다.
@@ -50,16 +50,16 @@ class ShootSignalNotifier extends Notifier<ShootSignal?> {
     if (preset == null) return null;
     ref
       ..listen(angleGuideProvider, (_, _) => _refresh())
-      ..listen(subjectProvider, (_, _) => _refresh());
+      ..listen(compositionProvider, (_, _) => _refresh());
     return _compute();
   }
 
   ShootSignal _compute() {
-    final subject = ref.read(subjectProvider);
+    final composition = ref.read(compositionProvider);
     return ShootSignal.of(
       ref.read(angleGuideProvider)?.state,
-      hasPerson: subject?.hasPerson ?? false,
-      fits: subject?.fits ?? false,
+      hasPerson: composition?.hasPerson ?? false,
+      fits: composition?.fits ?? false,
     );
   }
 

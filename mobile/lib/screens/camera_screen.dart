@@ -17,16 +17,16 @@ import '../providers/camera_providers.dart';
 import '../providers/preset_providers.dart';
 import '../services/capture_service.dart';
 import '../models/preview_transform.dart';
-import '../models/silhouette_template.dart';
+import '../models/composition_fit.dart';
 import '../models/subject.dart';
 import '../models/zoom_range.dart';
 import '../providers/api_providers.dart';
 import '../providers/attitude_providers.dart';
 import '../providers/guide_motion_provider.dart';
 import '../providers/shooting_providers.dart';
-import '../providers/subject_providers.dart';
+import '../providers/composition_providers.dart';
 import '../services/photo_cropper.dart';
-import '../services/pose_service.dart';
+import '../services/vision_service.dart';
 import '../services/telemetry_service.dart';
 import '../widgets/angle_indicator.dart';
 import '../widgets/camera_preview_fullscreen.dart';
@@ -34,6 +34,7 @@ import '../widgets/frame_guide.dart';
 import '../widgets/gallery_button.dart';
 import '../widgets/guide_card.dart';
 import '../widgets/coach_pill.dart';
+import '../widgets/composition_card.dart';
 import '../widgets/dynamic_frame.dart';
 import '../widgets/lock_button.dart';
 import '../widgets/opacity_slider.dart';
@@ -42,7 +43,6 @@ import '../widgets/reference_image.dart';
 import '../widgets/reference_overlay.dart';
 import '../widgets/reference_pip.dart';
 import '../widgets/shutter_button.dart';
-import '../widgets/template_painter.dart';
 import '../widgets/zoom_selector.dart';
 
 /// 메인 카메라 화면: 뷰파인더(프리뷰 + 가이드) + 설정 컨트롤 + 촬영 컨트롤.
@@ -72,7 +72,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   Future<void>? _opening;
 
   /// 실시간 인물 인식 (프리셋을 골랐을 때만 이미지 스트림 실행)
-  final _pose = PoseService();
+  final _vision = VisionService();
   bool _streaming = false;
 
   /// 프레임 좌표 변환에 쓰는 마지막 뷰파인더 크기
@@ -109,7 +109,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     unawaited(_controller?.dispose());
-    unawaited(_pose.close());
+    unawaited(_vision.close());
     unawaited(_volume?.cancel());
     _autoShutter.dispose();
     super.dispose();
@@ -158,7 +158,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       description,
       ResolutionPreset.high,
       enableAudio: false,
-      imageFormatGroup: PoseService.imageFormatGroup,
+      imageFormatGroup: VisionService.imageFormatGroup,
     );
     try {
       await controller.initialize();
@@ -336,7 +336,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
         if (controller.value.isStreamingImages) {
           await controller.stopImageStream();
         }
-        ref.read(subjectProvider.notifier).clear();
+        ref.read(compositionProvider.notifier).clear();
       }
     } on CameraException catch (e) {
       debugPrint('[Pose] 이미지 스트림 전환 실패: ${e.code}');
@@ -357,7 +357,14 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   Future<void> _onCameraImage(CameraImage image) async {
     final controller = _controller;
     if (controller == null) return;
-    final frame = await _pose.process(image, controller.description);
+    final requested = ref.read(activePresetProvider);
+    if (requested == null) return;
+    final frame = await _vision.process(
+      image,
+      controller.description,
+      VisionNeeds.of(requested),
+    );
+    if (!mounted) return;
     final preset = ref.read(activePresetProvider);
     final previewSize = controller.value.previewSize;
     if (frame == null ||
@@ -368,37 +375,52 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
         _finderSize.isEmpty) {
       return;
     }
-    final target = SubjectTarget.of(preset, _finderSize);
-    if (target == null) return;
+    final targets = Target.of(preset, _finderSize);
     final transform = PreviewTransform(
       screen: _finderSize,
       // previewSize는 센서 기준(가로)이므로 세로 화면 비율은 높이/너비
       previewAspect: previewSize.height / previewSize.width,
-      // 관절을 뷰파인더 0~1 좌표로
       frame: Offset.zero & _finderSize,
     );
-    final landmarks = frame.landmarks;
-    _pose.minInterval = landmarks == null
-        ? PoseService.idleInterval
-        : PoseService.activeInterval;
     ref
-        .read(subjectProvider.notifier)
+        .read(compositionProvider.notifier)
         .update(
-          Subject.fromLandmarks(
-            landmarks == null
-                ? null
-                : [
-                    for (final l in landmarks)
-                      () {
-                        final p = transform.toFrame(Offset(l.x, l.y));
-                        return PoseLandmark(p.dx, p.dy, l.likelihood);
-                      }(),
-                  ],
-            _finderSize,
-          ),
-          target,
+          _people(frame, targets, transform),
+          targets,
           focal: _focalLength,
         );
+  }
+
+  /// 인식 결과 → 뷰파인더 px 좌표의 사람들
+  List<LivePerson> _people(
+    VisionFrame frame,
+    List<Target> targets,
+    PreviewTransform transform,
+  ) {
+    final people = [
+      for (final f in frame.faces)
+        LivePerson.face(
+          Rect.fromPoints(
+            transform.toScreen(f.box.topLeft),
+            transform.toScreen(f.box.bottomRight),
+          ),
+          yawDeg: f.yawDeg,
+        ),
+    ];
+    final landmarks = frame.landmarks;
+    final bodyTarget = targets.whereType<BodyTarget>().firstOrNull;
+    if (landmarks == null || bodyTarget == null) return people;
+    final body = BodyPoints.fromLandmarks([
+      for (final l in landmarks)
+        () {
+          final p = transform.toFrame(Offset(l.x, l.y));
+          return PoseLandmark(p.dx, p.dy, l.likelihood);
+        }(),
+    ], _finderSize);
+    return [
+      ...people,
+      if (body != null) LivePerson.body(body, bodyTarget.span),
+    ];
   }
 
   /// 화면 단위 초점거리: 각도 1°가 화면에서 몇 px인지 정한다.
@@ -667,13 +689,15 @@ class _Viewfinder extends StatelessWidget {
           children: [
             Positioned.fill(child: preview),
             if (preset != null) ...[
-              Positioned.fill(child: _GridLayer(template: preset.template)),
-              Positioned.fill(
-                child: _GhostLayer(preset: preset, focal: focal),
-              ),
+              const Positioned.fill(child: _FrameCornersLayer()),
+              if (!preset.isTemplate)
+                Positioned.fill(
+                  child: _GhostLayer(preset: preset, focal: focal),
+                ),
               Positioned.fill(
                 child: _DynamicFrameLayer(
-                  fallback: SubjectTarget.of(preset, constraints.biggest),
+                  preset: preset,
+                  finder: constraints.biggest,
                 ),
               ),
             ],
@@ -827,11 +851,9 @@ class _SettingChip extends StatelessWidget {
   }
 }
 
-/// 3분할 격자 + 프레임 모서리 + 보조선(테이블·지평선·다리). 촬영 순간에는 사라진다.
-class _GridLayer extends ConsumerWidget {
-  const _GridLayer({required this.template});
-
-  final SilhouetteTemplate? template;
+/// 뷰파인더 모서리. 촬영 순간에는 사라진다.
+class _FrameCornersLayer extends ConsumerWidget {
+  const _FrameCornersLayer();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -845,16 +867,10 @@ class _GridLayer extends ConsumerWidget {
         child: LayoutBuilder(
           builder: (context, c) => CustomPaint(
             size: Size.infinite,
-            painter: FrameGuidePainter(aspectRatio: c.biggest.aspectRatio),
-            foregroundPainter: switch (template) {
-              final t? => TemplatePainter(
-                template: t,
-                color: AppTheme.whiteMuted,
-                strokeWidth: 1.4,
-                showFigure: false,
-              ),
-              null => null,
-            },
+            painter: FrameGuidePainter(
+              aspectRatio: c.biggest.aspectRatio,
+              showGrid: false,
+            ),
           ),
         ),
       ),
@@ -874,7 +890,7 @@ class _AngleIndicatorLayer extends ConsumerWidget {
     if (guide == null) return const SizedBox.shrink();
     // 사람을 맞추는 중에는 방해하지 않는다
     final busy = ref.watch(
-      subjectProvider.select((s) => (s?.hasPerson ?? false) && !s!.fits),
+      compositionProvider.select((s) => (s?.hasPerson ?? false) && !s!.fits),
     );
     return AnimatedOpacity(
       opacity: guide.state == AngleState.off && !busy ? 1 : 0,
@@ -898,7 +914,7 @@ class _CoachLayer extends ConsumerWidget {
         angle: ref.watch(angleGuideProvider),
         fit: preset == null
             ? null
-            : ref.watch(subjectProvider)?.fit ?? SubjectFit.none,
+            : ref.watch(compositionProvider)?.fit ?? CompositionFit.none,
         ready: ref.watch(shootSignalProvider) == ShootSignal.ready,
       ),
     );
@@ -922,28 +938,33 @@ class _GhostLayer extends ConsumerWidget {
 }
 
 class _DynamicFrameLayer extends ConsumerWidget {
-  const _DynamicFrameLayer({required this.fallback});
+  const _DynamicFrameLayer({required this.preset, required this.finder});
 
-  /// 아직 인물 프레임이 없을 때 목표 자리만 그린다.
-  final SubjectTarget? fallback;
+  final Preset preset;
+  final Size finder;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(subjectProvider);
-    final target = fallback;
+    final state = ref.watch(compositionProvider);
+    final targets = Target.of(preset, finder);
+    // 화면 비율·반전이 방금 바뀌었으면 새 자리로
+    final current =
+        state != null &&
+        state.targets.length == targets.length &&
+        targets.isNotEmpty &&
+        state.targets.first.center == targets.first.center;
     return DynamicFrame(
-      // 뷰파인더 비율이 방금 바뀌었으면 새 목표로
-      state: state != null && state.target.finder == target?.finder
+      template: preset.template,
+      opacity: preset.isTemplate ? ref.watch(overlayOpacityProvider) : 1,
+      signal: ref.watch(shootSignalProvider) ?? ShootSignal.waiting,
+      state: current
           ? state
-          : target == null
-          ? null
-          : SubjectState(target: target, fit: SubjectFit.none),
-      ready: ref.watch(shootSignalProvider) == ShootSignal.ready,
+          : CompositionState(targets: targets, fit: CompositionFit.none),
     );
   }
 }
 
-/// 사람이 잡히면 머리 자리를 가리지 않도록 패널을 접는다.
+/// 사람이 잡히면 구도를 가리지 않도록 패널을 접는다.
 class _GuidePanelLayer extends ConsumerWidget {
   const _GuidePanelLayer({required this.preset});
 
@@ -1107,7 +1128,9 @@ class _PresetThumbButton extends StatelessWidget {
               ? const Icon(Icons.grid_view_rounded)
               : ClipRRect(
                   borderRadius: BorderRadius.circular(9),
-                  child: ReferenceImage(preset: preset, silhouetteStroke: 1),
+                  child: preset.isTemplate
+                      ? CompositionDiagram(preset: preset)
+                      : ReferenceImage(preset: preset, silhouetteStroke: 1),
                 ),
         ),
       ),
