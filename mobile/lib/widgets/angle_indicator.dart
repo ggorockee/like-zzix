@@ -16,7 +16,7 @@ class AngleIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = guide.matched ? AppTheme.matchGreen : Colors.white;
+    final color = guide.matched ? AppTheme.mint : AppTheme.white;
     // 카메라가 목표보다 아래를 보면(+) 막대가 위로 → 폰을 위로 향하면 내려와 겹침
     final dy = (-guide.pitchDelta * _pixelsPerDegree).clamp(-140.0, 140.0);
     return IgnorePointer(
@@ -63,7 +63,7 @@ class AngleIndicator extends StatelessWidget {
     decoration: BoxDecoration(
       color: color,
       borderRadius: BorderRadius.circular(2),
-      boxShadow: const [BoxShadow(color: Colors.black45, blurRadius: 4)],
+      boxShadow: const [BoxShadow(color: AppTheme.scrim, blurRadius: 4)],
     ),
   );
 }
@@ -78,7 +78,8 @@ class AngleStatus extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (icon, text) = message(guide, hasPreset: hasPreset);
-    final color = guide.matched ? AppTheme.matchGreen : Colors.black54;
+    final color = guide.matched ? AppTheme.mint : AppTheme.scrim;
+    final onColor = guide.matched ? AppTheme.ink : AppTheme.white;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -89,14 +90,11 @@ class AngleStatus extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 18, color: Colors.white),
+          Icon(icon, size: 18, color: onColor),
           const SizedBox(width: 6),
           Text(
             text,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w600,
-            ),
+            style: TextStyle(color: onColor, fontWeight: FontWeight.w600),
           ),
         ],
       ),

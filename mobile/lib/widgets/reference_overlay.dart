@@ -51,7 +51,7 @@ class ReferenceOverlay extends StatelessWidget {
                 child: CustomPaint(
                   painter: SilhouettePainter(
                     preset: preset,
-                    color: perfect ? AppTheme.matchGreen : Colors.white,
+                    color: perfect ? AppTheme.mint : AppTheme.white,
                     strokeWidth: perfect ? 4 : 3,
                     fillOpacity: 0,
                   ),
@@ -91,7 +91,7 @@ class LiveJointsPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final frame = SilhouettePainter.frameRect(size, aspectRatio);
     final outline = Paint()
-      ..color = Colors.black54
+      ..color = AppTheme.scrim
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
     for (final j in PoseMatcher.joints) {
@@ -102,10 +102,10 @@ class LiveJointsPainter extends CustomPainter {
       );
       final ok = jointOk[j];
       final color = ok == null
-          ? Colors.white70
+          ? AppTheme.whiteMuted
           : ok
-          ? AppTheme.matchGreen
-          : const Color(0xFFFF9F0A);
+          ? AppTheme.mint
+          : AppTheme.coral;
       canvas
         ..drawCircle(c, 6, Paint()..color = color)
         ..drawCircle(c, 6, outline);

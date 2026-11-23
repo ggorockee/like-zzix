@@ -31,10 +31,12 @@ class GuideStatus extends StatelessWidget {
     if (message == null) return const SizedBox(height: 36);
     final (icon, text, tone) = message;
     final color = switch (tone) {
-      GuideTone.perfect => AppTheme.matchGreen,
-      GuideTone.good => AppTheme.matchGreen.withValues(alpha: 0.75),
-      GuideTone.neutral => Colors.black54,
+      GuideTone.perfect => AppTheme.mint,
+      GuideTone.good => AppTheme.mint.withValues(alpha: 0.75),
+      GuideTone.neutral => AppTheme.scrim,
     };
+    // 민트 위에는 ink, 어두운 판 위에는 흰색 (대비 확보)
+    final onColor = tone == GuideTone.neutral ? AppTheme.white : AppTheme.ink;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -45,14 +47,11 @@ class GuideStatus extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 18, color: Colors.white),
+          Icon(icon, size: 18, color: onColor),
           const SizedBox(width: 6),
           Text(
             text,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w600,
-            ),
+            style: TextStyle(color: onColor, fontWeight: FontWeight.w600),
           ),
         ],
       ),
@@ -133,16 +132,16 @@ class PerfectMatchBanner extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
             decoration: BoxDecoration(
-              color: AppTheme.matchGreen,
+              color: AppTheme.mint,
               borderRadius: BorderRadius.circular(28),
               boxShadow: const [
-                BoxShadow(color: Colors.black38, blurRadius: 12),
+                BoxShadow(color: AppTheme.scrimSoft, blurRadius: 12),
               ],
             ),
             child: const Text(
               '지금 찍으세요!',
               style: TextStyle(
-                color: Colors.white,
+                color: AppTheme.ink,
                 fontSize: 22,
                 fontWeight: FontWeight.w800,
               ),

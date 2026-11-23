@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/app_theme.dart';
 import '../models/preset.dart';
 import 'reference_image.dart';
 
@@ -16,7 +17,7 @@ class ReferencePip extends StatelessWidget {
       child: GestureDetector(
         onTap: () => showDialog<void>(
           context: context,
-          barrierColor: Colors.black87,
+          barrierColor: AppTheme.scrimStrong,
           builder: (context) => GestureDetector(
             onTap: () => Navigator.pop(context),
             child: Center(
@@ -36,12 +37,12 @@ class ReferencePip extends StatelessWidget {
           height: 84 / preset.aspectRatio,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: Colors.white, width: 2),
-            boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 6)],
+            border: Border.all(color: AppTheme.white, width: 2),
+            boxShadow: const [BoxShadow(color: AppTheme.scrim, blurRadius: 6)],
           ),
           clipBehavior: Clip.antiAlias,
           child: ColoredBox(
-            color: const Color(0xFF2A2A2E),
+            color: AppTheme.inkRaised,
             child: ReferenceImage(preset: preset),
           ),
         ),

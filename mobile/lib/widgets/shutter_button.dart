@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../core/app_theme.dart';
+
 /// 흰 테두리 원형 셔터. 촬영 중에는 비활성화.
 class ShutterButton extends StatelessWidget {
   const ShutterButton({super.key, required this.onPressed, this.busy = false});
@@ -24,14 +26,14 @@ class ShutterButton extends StatelessWidget {
             padding: const EdgeInsets.all(5),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 4),
+              border: Border.all(color: AppTheme.white, width: 4),
             ),
             child: AnimatedScale(
               duration: const Duration(milliseconds: 120),
               scale: busy ? 0.85 : 1,
               child: const DecoratedBox(
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: AppTheme.white,
                   shape: BoxShape.circle,
                 ),
               ),

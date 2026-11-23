@@ -28,10 +28,10 @@ class PresetGridItem extends StatelessWidget {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
           decoration: BoxDecoration(
-            color: const Color(0xFF2A2A2E),
+            color: AppTheme.inkRaised,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: selected ? AppTheme.brand : Colors.transparent,
+              color: selected ? AppTheme.coral : Colors.transparent,
               width: 2.5,
             ),
           ),
@@ -45,7 +45,7 @@ class PresetGridItem extends StatelessWidget {
                   gradient: LinearGradient(
                     begin: Alignment.center,
                     end: Alignment.bottomCenter,
-                    colors: [Colors.transparent, Colors.black87],
+                    colors: [Colors.transparent, AppTheme.scrimStrong],
                   ),
                 ),
               ),
@@ -58,7 +58,7 @@ class PresetGridItem extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: Colors.white,
+                    color: AppTheme.white,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -85,7 +85,7 @@ class CreateFromPhotoItem extends StatelessWidget {
       child: Ink(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white24),
+          border: Border.all(color: AppTheme.whiteFaint),
         ),
         child: const Column(
           mainAxisAlignment: MainAxisAlignment.center,

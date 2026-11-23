@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/app_theme.dart';
 import '../models/preset.dart';
 
 /// 선택한 프리셋의 촬영 팁 + 단계별 가이드 (탭하면 접기/펼치기).
@@ -35,7 +36,7 @@ class _GuideCardState extends State<GuideCard> {
           width: double.infinity,
           padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
           decoration: BoxDecoration(
-            color: Colors.black54,
+            color: AppTheme.scrim,
             borderRadius: BorderRadius.circular(14),
           ),
           child: Column(
@@ -74,7 +75,7 @@ class _GuideCardState extends State<GuideCard> {
                           alignment: Alignment.center,
                           margin: const EdgeInsets.only(right: 8, top: 1),
                           decoration: const BoxDecoration(
-                            color: Colors.white24,
+                            color: AppTheme.whiteFaint,
                             shape: BoxShape.circle,
                           ),
                           child: Text('${i + 1}', style: text.labelSmall),

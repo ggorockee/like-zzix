@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/app_theme.dart';
 import '../models/zoom_range.dart';
 
 /// 0.5 / 1 / 2 / 3배 빠른 선택. 활성 버튼은 현재 실제 배율을 표시.
@@ -23,7 +24,7 @@ class ZoomSelector extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: Colors.black38,
+        color: AppTheme.scrimSoft,
         borderRadius: BorderRadius.circular(24),
       ),
       child: Row(
@@ -69,14 +70,14 @@ class _ZoomButton extends StatelessWidget {
           margin: const EdgeInsets.symmetric(horizontal: 2),
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: active ? Colors.white24 : Colors.transparent,
+            color: active ? AppTheme.coral : Colors.transparent,
             shape: BoxShape.rectangle,
             borderRadius: BorderRadius.circular(18),
           ),
           child: Text(
             label,
             style: TextStyle(
-              color: active ? const Color(0xFFFFD60A) : Colors.white,
+              color: active ? AppTheme.ink : AppTheme.white,
               fontSize: active ? 13 : 12,
               fontWeight: FontWeight.w700,
             ),

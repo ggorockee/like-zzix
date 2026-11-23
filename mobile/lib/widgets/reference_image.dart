@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/app_theme.dart';
 import '../core/env.dart';
 import '../models/preset.dart';
 import 'silhouette_painter.dart';
@@ -29,7 +30,7 @@ class ReferenceImage extends StatelessWidget {
             size: Size.infinite,
             painter: SilhouettePainter(
               preset: preset,
-              color: Colors.white,
+              color: AppTheme.white,
               strokeWidth: silhouetteStroke,
               glow: false,
               fillOpacity: 0.15,

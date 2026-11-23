@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import '../core/app_theme.dart';
+
 /// 최근 촬영 사진 썸네일. 탭하면 기기 갤러리 앱으로 이동.
 class GalleryButton extends StatelessWidget {
   const GalleryButton({
@@ -29,9 +31,9 @@ class GalleryButton extends StatelessWidget {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: Colors.black45,
+              color: AppTheme.scrim,
               shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 2),
+              border: Border.all(color: AppTheme.white, width: 2),
             ),
             clipBehavior: Clip.antiAlias,
             child: path == null
