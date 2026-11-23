@@ -18,8 +18,8 @@ func TestEmbeddedPresetsAreValid(t *testing.T) {
 	if !strings.HasPrefix(c.ETag(), `"`) {
 		t.Fatalf("etag must be quoted: %s", c.ETag())
 	}
-	if got := len(c.Categories()); got != 2 {
-		t.Fatalf("want 2 categories, got %d", got)
+	if got := len(c.Categories()); got != 4 {
+		t.Fatalf("want 4 categories, got %d", got)
 	}
 }
 

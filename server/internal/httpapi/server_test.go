@@ -82,7 +82,7 @@ func TestPresetByID(t *testing.T) {
 func TestCategories(t *testing.T) {
 	app, _, _ := newTestApp(t)
 	res, body := do(t, app, httptest.NewRequest(http.MethodGet, "/v1/categories", nil))
-	if res.StatusCode != 200 || !strings.Contains(body, "음료·카페") {
+	if res.StatusCode != 200 || !strings.Contains(body, "특수/2인") {
 		t.Fatalf("categories: %d %s", res.StatusCode, body)
 	}
 }
