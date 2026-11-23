@@ -15,6 +15,7 @@ final presetRepositoryProvider = Provider<PresetRepository>(
 final presetsProvider = FutureProvider<List<Preset>>((ref) async {
   final repository = ref.watch(presetRepositoryProvider);
   final templates = await repository.loadTemplates();
+  final bundled = await repository.loadBundled();
   final api = ref.watch(apiClientProvider);
   if (api != null) {
     try {
@@ -22,12 +23,19 @@ final presetsProvider = FutureProvider<List<Preset>>((ref) async {
       final remote = raw == null
           ? const <Preset>[]
           : PresetRepository.parse(raw);
-      if (remote.isNotEmpty) return [...templates, ...remote];
+      if (remote.isNotEmpty) {
+        final ids = {for (final t in templates) t.id};
+        return PresetRepository.merge(templates, [
+          // 구도 사진이 아직 등록되지 않은 서버면 번들 사진으로
+          if (!remote.any((p) => ids.contains(p.id))) ...bundled,
+          for (final p in remote) p.withBundledPhoto(bundled),
+        ]);
+      }
     } on Object catch (e) {
       debugPrint('[Preset] 서버 목록 실패, 번들 사용: $e');
     }
   }
-  return [...templates, ...await repository.loadBundled()];
+  return PresetRepository.merge(templates, bundled);
 });
 
 /// 시트에서 고른 프리셋 (반전 전 원본). null이면 가이드 없음.

@@ -1009,7 +1009,7 @@ class _GuidePanel extends ConsumerWidget {
               ],
             ),
           ),
-          if (!preset.isTemplate) ...[
+          if (preset.hasPhoto) ...[
             const SizedBox(width: 10),
             ReferencePip(preset: preset),
           ],
@@ -1130,7 +1130,7 @@ class _PresetThumbButton extends StatelessWidget {
                   borderRadius: BorderRadius.circular(9),
                   child: preset.isTemplate
                       ? CompositionDiagram(preset: preset)
-                      : ReferenceImage(preset: preset, silhouetteStroke: 1),
+                      : ReferenceImage(preset: preset),
                 ),
         ),
       ),

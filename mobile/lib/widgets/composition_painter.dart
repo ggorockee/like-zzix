@@ -26,9 +26,24 @@ abstract final class CompositionPainter {
       final w = width * e.weight;
       switch (e.type) {
         case GuideElementType.line:
-          final path = Path()
-            ..addPolygon([for (final p in e.points) px(p)], false);
+          final points = [for (final p in e.points) px(p)];
+          final path = e.curve
+              ? GuideStroke.smooth(points, closed: e.closed)
+              : (Path()..addPolygon(points, e.closed));
           GuideStroke.draw(canvas, path, color: c, width: w, dashed: e.dashed);
+        case GuideElementType.circle:
+          GuideStroke.draw(
+            canvas,
+            Path()..addOval(
+              Rect.fromCircle(
+                center: px(e.points.first),
+                radius: e.radius * size.height,
+              ),
+            ),
+            color: c,
+            width: w,
+            dashed: e.dashed,
+          );
         case GuideElementType.rect:
           final r = Rect.fromPoints(px(e.rect.topLeft), px(e.rect.bottomRight));
           GuideStroke.draw(

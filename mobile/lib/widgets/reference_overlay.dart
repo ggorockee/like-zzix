@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../core/app_theme.dart';
 import '../models/guide_motion.dart';
 import '../models/preset.dart';
 import '../models/composition_fit.dart';
 import 'reference_image.dart';
-import 'silhouette_painter.dart';
 
 /// 고스트: 사진 프리셋에서 처음 위치를 잡을 때만 잠깐 보이는 반투명 레퍼런스 사진.
 /// 사람이 인식되면 [visible]이 꺼지며 스르륵 사라지고, 동적 프레임이 이어받는다.
@@ -53,29 +51,13 @@ class ReferenceOverlay extends StatelessWidget {
     );
   }
 
-  List<Widget> _layers(Rect frame) {
-    return [
-      Positioned.fromRect(
-        rect: frame,
-        child: Opacity(
-          opacity: opacity,
-          child: ReferenceImage(
-            preset: preset,
-            fit: BoxFit.fill,
-            showFallback: false,
-          ),
-        ),
+  List<Widget> _layers(Rect frame) => [
+    Positioned.fromRect(
+      rect: frame,
+      child: Opacity(
+        opacity: opacity,
+        child: ReferenceImage(preset: preset, fit: BoxFit.fill),
       ),
-      Positioned.fill(
-        child: CustomPaint(
-          painter: SilhouettePainter(
-            preset: preset,
-            color: AppTheme.white,
-            strokeWidth: 1.8,
-            fillOpacity: 0,
-          ),
-        ),
-      ),
-    ];
-  }
+    ),
+  ];
 }

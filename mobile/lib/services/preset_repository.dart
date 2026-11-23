@@ -33,6 +33,32 @@ class PresetRepository {
     return templates;
   }
 
+  /// 벡터 구도와 사진 목록(서버 또는 번들)을 합친다.
+  ///
+  /// - 같은 id(`cmp-…`)면 구도에 글·사진·순서를 입힌다
+  /// - 사진 관리 대상 구도([CompositionTemplate.hasPhoto])가 목록에서 빠지면 숨긴다
+  ///   (관리자 콘솔에서 비공개로 바꾼 것). 목록에 구도가 하나도 없으면 옛 서버이므로 그대로 둔다.
+  /// - 구도가 아닌 항목은 사진 프리셋으로 뒤에 붙인다
+  static List<Preset> merge(List<Preset> templates, List<Preset> photos) {
+    final ids = {for (final t in templates) t.id};
+    final byId = {for (final p in photos) p.id: p};
+    final managed = byId.keys.any(ids.contains);
+    final merged = [
+      for (final t in templates)
+        if (byId[t.id] case final doc?)
+          t.withContent(doc)
+        else if (!managed || !(t.template?.hasPhoto ?? false))
+          t,
+      for (final p in photos)
+        if (!ids.contains(p.id)) p,
+    ];
+    final order = {for (final (i, p) in merged.indexed) p: i};
+    return merged..sort((a, b) {
+      final by = a.sortOrder.compareTo(b.sortOrder);
+      return by != 0 ? by : order[a]!.compareTo(order[b]!);
+    });
+  }
+
   Future<List<Preset>> loadBundled() async {
     final raw = await _bundle.loadString(bundledAsset);
     return parse(raw);

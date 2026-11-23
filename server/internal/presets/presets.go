@@ -56,10 +56,11 @@ type Catalog struct {
 }
 
 var categoryNames = map[string]string{
-	"full_body": "전신샷",
-	"look_back": "부르고 찍기",
-	"side":      "옆모습",
-	"cafe":      "음료·카페",
+	// ids are kept for already stored documents; names follow the app's tabs
+	"full_body": "기본/인물",
+	"cafe":      "배경/여행",
+	"look_back": "포즈/느낌",
+	"side":      "특수/2인",
 }
 
 // Load parses and validates the embedded presets.

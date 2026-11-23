@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import 'package:likezzix/models/preview_transform.dart';
 import 'package:likezzix/services/vision_service.dart';
-import 'package:likezzix/widgets/silhouette_painter.dart';
+import 'package:likezzix/models/composition_fit.dart';
 
 void main() {
   group('PreviewTransform (cover)', () {
@@ -14,7 +14,7 @@ void main() {
     final transform = PreviewTransform(
       screen: screen,
       previewAspect: 720 / 1280,
-      frame: SilhouettePainter.frameRect(screen, 1),
+      frame: BodyTarget.fitFrame(screen, 1),
     );
 
     test('프리뷰 영역은 화면을 꽉 채우고 좌우가 잘림', () {

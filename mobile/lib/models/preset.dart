@@ -1,16 +1,14 @@
-import 'dart:ui' show Offset;
-
 import 'package:flutter/foundation.dart';
 
 import 'angle_spec.dart';
 import 'composition.dart';
 
-/// 구도 목록의 탭. 서버 사진 프리셋의 옛 카테고리 id도 여기로 묶는다.
+/// 구도 목록의 탭. 서버·관리자 콘솔은 옛 카테고리 id(full_body 등)를 그대로 쓴다.
 enum PresetCategory {
-  basic('기본/인물', ['basic', 'full_body', 'cafe']),
-  travel('배경/여행', ['travel']),
-  pose('포즈/느낌', ['pose', 'look_back', 'side']),
-  special('특수/2인', ['special']);
+  basic('기본/인물', ['basic', 'full_body']),
+  travel('배경/여행', ['travel', 'cafe']),
+  pose('포즈/느낌', ['pose', 'look_back']),
+  special('특수/2인', ['special', 'side']);
 
   const PresetCategory(this.label, this.ids);
 
@@ -43,7 +41,7 @@ class PoseLandmark {
   bool get isVisible => likelihood >= 0.5;
 }
 
-/// BlazePose 33점 인덱스 중 실루엣/매칭에 쓰는 것.
+/// BlazePose 33점 인덱스 중 인물 자리에 쓰는 것.
 abstract final class PoseIndex {
   static const nose = 0;
   static const leftShoulder = 11;
@@ -88,7 +86,6 @@ class Preset {
     this.template,
     this.mirrored = false,
     this.guide = const [],
-    this.outline = const [],
     this.referenceAsset,
     this.referenceUrl,
   });
@@ -120,13 +117,6 @@ class Preset {
         for (final step in json['guide'] as List<dynamic>? ?? const [])
           step as String,
       ],
-      outline: [
-        for (final p in json['outline'] as List<dynamic>? ?? const [])
-          Offset(
-            ((p as List<dynamic>)[0] as num).toDouble(),
-            (p[1] as num).toDouble(),
-          ),
-      ],
       referenceAsset: json['reference_asset'] as String?,
       referenceUrl: json['reference_url'] as String?,
     );
@@ -143,7 +133,7 @@ class Preset {
         tip: json['tip'] as String? ?? '',
         aspectRatio: 3 / 4,
         angle: AngleSpec.fromJson(json['angle'] as Map<String, dynamic>),
-        sortOrder: order,
+        sortOrder: 1000 + order,
         guide: [
           for (final step in json['guide'] as List<dynamic>? ?? const [])
             step as String,
@@ -175,9 +165,6 @@ class Preset {
   /// 이 구도대로 찍기 위한 단계별 안내.
   final List<String> guide;
 
-  /// 사람 윤곽선 (프레임 기준 0~1 좌표, 시계방향 폐곡선). 없으면 관절로 실루엣을 그림.
-  final List<Offset> outline;
-
   /// 레퍼런스 사진 asset 경로. 로컬 빌드에만 존재할 수 있으므로 없을 때를 처리해야 함.
   final String? referenceAsset;
 
@@ -187,6 +174,48 @@ class Preset {
   bool get isTemplate => template != null;
 
   bool get hasLandmarks => landmarks.length >= PoseIndex.count;
+
+  /// 벡터 구도에 [doc](관리자 콘솔 또는 번들)의 글·사진을 입힌다. 판정용 구도는 그대로.
+  Preset withContent(Preset doc) => Preset(
+    id: id,
+    category: category,
+    title: doc.title,
+    tip: doc.tip.isEmpty ? tip : doc.tip,
+    aspectRatio: doc.aspectRatio,
+    angle: angle,
+    sortOrder: doc.sortOrder,
+    guide: doc.guide.isEmpty ? guide : doc.guide,
+    template: template,
+    referenceAsset: doc.referenceAsset ?? referenceAsset,
+    referenceUrl: doc.referenceUrl,
+  );
+
+  /// 서버 사진을 못 받을 때(오프라인) 쓸 번들 사진 경로를 채운다.
+  Preset withBundledPhoto(List<Preset> bundled) {
+    if (referenceAsset != null) return this;
+    for (final b in bundled) {
+      if (b.id == id) return _withAsset(b.referenceAsset);
+    }
+    return this;
+  }
+
+  Preset _withAsset(String? asset) => Preset(
+    id: id,
+    category: category,
+    title: title,
+    tip: tip,
+    aspectRatio: aspectRatio,
+    angle: angle,
+    sortOrder: sortOrder,
+    guide: guide,
+    landmarks: landmarks,
+    referenceAsset: asset,
+    referenceUrl: referenceUrl,
+    template: template,
+    mirrored: mirrored,
+  );
+
+  bool get hasPhoto => referenceAsset != null || referenceUrl != null;
 
   /// 좌우를 뒤집은 프리셋 (다시 부르면 원래대로).
   Preset get flipped => Preset(
@@ -206,14 +235,11 @@ class Preset {
             return PoseLandmark(1 - l.x, l.y, l.likelihood);
           }(),
     ],
-    outline: [for (final p in outline) Offset(1 - p.dx, p.dy)],
     referenceAsset: referenceAsset,
     referenceUrl: referenceUrl,
     template: template?.mirrored,
     mirrored: !mirrored,
   );
-
-  bool get hasOutline => outline.length >= 3;
 
   static double _parseAspectRatio(String? value) {
     final parts = value?.split(':');

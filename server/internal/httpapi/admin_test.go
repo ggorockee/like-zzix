@@ -212,8 +212,8 @@ func TestAdminPresetLifecycle(t *testing.T) {
 	}
 	e.login(t, "boss@example.com")
 
-	// 시드된 2개 + 검증 실패/ID 불일치
-	if _, body := e.do(t, "GET", "/admin/v1/presets", ""); strings.Count(body, `"status":"published"`) != 2 {
+	// 시드된 내장 프리셋 12개 + 검증 실패/ID 불일치
+	if _, body := e.do(t, "GET", "/admin/v1/presets", ""); strings.Count(body, `"status":"published"`) != 12 {
 		t.Fatalf("seeded list: %s", body)
 	}
 	if res, _ := e.do(t, "POST", "/admin/v1/presets", `{"doc":{"id":"Bad Id","title":"x"}}`); res.StatusCode != 422 {
@@ -265,7 +265,7 @@ func TestAdminPresetLifecycle(t *testing.T) {
 		Items []map[string]any `json:"items"`
 	}
 	_ = json.Unmarshal([]byte(pub), &list)
-	if len(list.Items) != 3 || list.Items[0]["id"] != "new-pose" || list.Items[0]["title"] != "수정된 포즈" {
+	if len(list.Items) != 13 || list.Items[0]["id"] != "new-pose" || list.Items[0]["title"] != "수정된 포즈" {
 		t.Fatalf("published list: %s", pub)
 	}
 	url, _ := list.Items[0]["reference_url"].(string)
@@ -295,7 +295,7 @@ func TestAdminPresetLifecycle(t *testing.T) {
 		`likezzix_admin_changes_total{action="create"} 1`,
 		`likezzix_admin_changes_total{action="publish"} 1`,
 		`likezzix_admin_changes_total{action="image"} 1`,
-		`likezzix_presets{status="published"} 2`,
+		`likezzix_presets{status="published"} 12`,
 		`likezzix_db_up 1`,
 	} {
 		if !strings.Contains(m, want) {

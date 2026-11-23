@@ -23,11 +23,7 @@ class ReferencePip extends StatelessWidget {
             child: Center(
               child: AspectRatio(
                 aspectRatio: preset.aspectRatio,
-                child: ReferenceImage(
-                  preset: preset,
-                  fit: BoxFit.contain,
-                  silhouetteStroke: 3,
-                ),
+                child: ReferenceImage(preset: preset, fit: BoxFit.contain),
               ),
             ),
           ),
