@@ -3,3 +3,8 @@
 
 // Google 테스트 AdMob App ID
 ADMOB_APP_ID = ca-app-pub-3940256099942544~1458002511
+
+// google_mlkit_*(SwiftPM)는 정적 라이브러리라 Objective-C 카테고리와 정적 초기화가 링크에서
+// 빠지지 않도록 두 플래그가 필요하다. 없으면 인식기를 처음 쓸 때 unrecognized selector로 앱이 종료된다.
+// (google-mlkit-swiftpm README "Add the linker flags")
+OTHER_LDFLAGS = $(inherited) -ObjC -all_load

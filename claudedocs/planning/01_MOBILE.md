@@ -23,7 +23,7 @@
 | `flutter_riverpod` | ^3.5.0 | 상태 관리 (단일 채택) |
 | `go_router` | ^18.1.4 | 라우팅 + 딥링크 `/p/:presetId` |
 | `camera` | ^0.12.2 | 프리뷰, 이미지 스트림, 촬영 |
-| `google_mlkit_pose_detection` | ^1.0.3 | 온디바이스 33점 포즈 추출 |
+| `google_mlkit_pose_detection` | ^1.0.3 | 온디바이스 33점 포즈 추출. iOS는 링커 플래그(`ios/Flutter/App.xcconfig`)와 모델 복사(`ios/scripts/copy_mlkit_resources.sh`)가 필수이며 빠지면 인식기를 처음 쓸 때 앱이 종료됨. 버전 변경 후 `integration_test/vision_smoke_test.dart`를 시뮬레이터에서 실행 |
 | `sensors_plus` | ^7.1.1 | 가속도계 기반 pitch/roll |
 | `google_mobile_ads` | ^9.2.0 | Native / Interstitial / Rewarded |
 | `firebase_core`, `firebase_remote_config` | ^7.1.0 (RC) | 광고 플래그 |
