@@ -108,7 +108,7 @@ void main() {
       tester.widget<ShutterButton>(find.byType(ShutterButton)).ready,
       isFalse,
     );
-    expect(find.text('사람을 화면에 담아 주세요'), findsOneWidget);
+    expect(find.text('찍을 사람을 화면에 비추세요'), findsOneWidget);
   });
 
   testWidgets('작은 화면·큰 글자에서도 넘치지 않음', (tester) async {

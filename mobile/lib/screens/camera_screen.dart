@@ -33,6 +33,7 @@ import '../services/telemetry_service.dart';
 import '../widgets/about_sheet.dart';
 import '../widgets/angle_indicator.dart';
 import '../widgets/camera_preview_fullscreen.dart';
+import '../widgets/capture_notice.dart';
 import '../widgets/frame_guide.dart';
 import '../widgets/gallery_button.dart';
 import '../widgets/guide_card.dart';
@@ -64,7 +65,12 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   CameraController? _controller;
   CameraLensDirection _lens = CameraLensDirection.back;
   _CameraIssue _issue = _CameraIssue.none;
+
+  /// 셔터를 누른 뒤 저장이 끝날 때까지
   bool _capturing = false;
+
+  /// 그중 카메라가 사진을 찍는 동안 (인식 중지). 저장하는 동안에는 다시 안내한다.
+  bool _shooting = false;
   bool _switching = false;
   bool _flash = false;
 
@@ -104,6 +110,8 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   /// 이번 세션에 마지막으로 찍은 사진 (갤러리 버튼 썸네일)
   String? _lastPhotoPath;
 
+  final _notice = ValueNotifier<CaptureNotice?>(null);
+
   @override
   void initState() {
     super.initState();
@@ -118,6 +126,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     unawaited(_vision.close());
     unawaited(_volume?.cancel());
     _autoShutter.dispose();
+    _notice.dispose();
     super.dispose();
   }
 
@@ -132,6 +141,8 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
         final controller = _controller;
         if (controller == null) return;
         _streaming = false;
+        // 돌아왔을 때 떠나기 전 판정으로 초록불이 켜지지 않게 한다
+        ref.read(compositionProvider.notifier).clear();
         setState(() => _controller = null);
         unawaited(controller.dispose());
       case AppLifecycleState.resumed:
@@ -260,8 +271,10 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     final controller = _controller;
     final next = _zoomRange.clamp(level);
     if (controller == null || _switching || (next - _zoom).abs() < 0.01) return;
-    setState(() => _zoom = next);
     final wantUltraWide = _ultraWide != null && next < 1;
+    // 찍는 중에 렌즈를 바꾸면 카메라가 닫혀 촬영이 끝나지 않는다
+    if (_shooting && wantUltraWide != _onUltraWide) return;
+    setState(() => _zoom = next);
     unawaited(
       wantUltraWide == _onUltraWide
           ? _applyZoom(controller)
@@ -299,9 +312,15 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   /// 자동 촬영 상태와 볼륨 버튼 구독을 현재 화면 상태에 맞춘다.
   void _syncShutterTriggers() {
     if (!mounted) return;
+    final signal = ref.read(shootSignalProvider);
     _autoShutter.update(
-      ready: ref.read(shootSignalProvider) == ShootSignal.ready,
-      enabled: ref.read(autoShutterProvider) && _canShoot && !_capturing,
+      // 인식이 멈춘 것은 초록불이 꺼진 것이 아니다 (같은 초록불에서 또 찍지 않게)
+      ready: signal == ShootSignal.ready || signal == ShootSignal.paused,
+      enabled:
+          ref.read(autoShutterProvider) &&
+          signal == ShootSignal.ready &&
+          _canShoot &&
+          !_capturing,
     );
     // 쓰지 않을 때는 구독을 끊어 볼륨 버튼의 원래 기능을 돌려준다.
     if (_canShoot == (_volume != null)) return;
@@ -343,7 +362,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
         controller != null &&
         controller.value.isInitialized &&
         _foreground &&
-        !_capturing &&
+        !_shooting &&
         !_switching &&
         ref.read(activePresetProvider) != null;
     if (want == _streaming || controller == null) return;
@@ -360,6 +379,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       }
     } on CameraException catch (e) {
       debugPrint('[Pose] 이미지 스트림 전환 실패: ${e.code}');
+      if (mounted) ref.read(compositionProvider.notifier).clear();
     }
   }
 
@@ -367,6 +387,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     final controller = _controller;
     if (!_streaming || controller == null) return;
     _streaming = false;
+    ref.read(compositionProvider.notifier).pause();
     try {
       await controller.stopImageStream();
     } on CameraException catch (e) {
@@ -506,6 +527,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     final ratio = ref.read(viewfinderAspectProvider).ratio;
     setState(() {
       _capturing = true;
+      _shooting = true;
       _flash = true;
     });
     unawaited(HapticFeedback.lightImpact());
@@ -513,11 +535,16 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       if (mounted) setState(() => _flash = false);
     });
 
-    final messenger = ScaffoldMessenger.of(context);
     // 일부 Android 기기는 이미지 스트림과 촬영을 동시에 못 하므로 잠시 멈춤
     await _pauseStream();
     try {
-      final photo = await controller.takePicture();
+      final XFile photo;
+      try {
+        photo = await controller.takePicture();
+      } finally {
+        // 자르기·저장은 몇 초 걸릴 수 있으므로 찍자마자 인식을 다시 시작한다
+        await _endShooting();
+      }
       final result = await ref
           .read(captureServiceProvider)
           .saveToGallery(await PhotoCropper.crop(photo.path, ratio));
@@ -535,27 +562,36 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
             : AppEvent.photoSaveFailed,
         preset: ref.read(selectedPresetProvider)?.id,
       );
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(switch (result) {
+      // 잠금 중에는 갤러리로 빠져나가지 않게 한다
+      final viewable =
+          result == SaveResult.saved && !ref.read(guideLockProvider);
+      _notify(
+        CaptureNotice(
+          switch (result) {
             SaveResult.saved => '저장 완료',
             SaveResult.permissionDenied => '설정에서 사진 저장 권한을 허용해 주세요',
             SaveResult.failed => '사진을 저장하지 못했어요',
-          }),
-          // 잠금 중에는 갤러리로 빠져나가지 않게 한다
-          action: result == SaveResult.saved && !ref.read(guideLockProvider)
-              ? SnackBarAction(label: '보기', onPressed: _openGallery)
-              : null,
-          duration: const Duration(seconds: 3),
+          },
+          actionLabel: viewable ? '보기' : null,
+          onAction: viewable ? _openGallery : null,
         ),
       );
     } on CameraException catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('촬영에 실패했어요 (${e.code})')));
+      _notify(CaptureNotice('촬영에 실패했어요 (${e.code})'));
     } finally {
       if (mounted) setState(() => _capturing = false);
       _syncShutterTriggers();
-      await _syncPoseStream();
     }
+  }
+
+  Future<void> _endShooting() async {
+    if (!mounted) return;
+    setState(() => _shooting = false);
+    await _syncPoseStream();
+  }
+
+  void _notify(CaptureNotice notice) {
+    if (mounted) _notice.value = notice;
   }
 
   void _setLocked(bool locked) {
@@ -639,7 +675,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                     if (preset != null) _GuidePanelLayer(preset: preset),
                   ],
                   const Spacer(),
-                  _CoachLayer(preset: preset),
+                  _CoachLayer(preset: preset, shooting: _shooting),
                   const SizedBox(height: 12),
                   if (hasPreview)
                     ZoomSelector(
@@ -673,6 +709,12 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                   ),
                 ],
               ),
+            ),
+            Positioned(
+              top: padding.top + _topBarHeight + 4,
+              left: 16,
+              right: 16,
+              child: Center(child: CaptureNoticeBar(notice: _notice)),
             ),
           ],
         ),
@@ -756,7 +798,7 @@ class _LockedHint extends StatelessWidget {
       color: AppTheme.scrim,
       borderRadius: BorderRadius.circular(20),
     ),
-    child: const Text('아래 안내대로 움직이고, 초록불에 찍으세요'),
+    child: const Text('아래 글대로 움직이고, 초록색이 되면 찍으세요'),
   );
 }
 
@@ -918,9 +960,11 @@ class _AngleIndicatorLayer extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final guide = ref.watch(angleGuideProvider);
     if (guide == null) return const SizedBox.shrink();
-    // 사람을 맞추는 중에는 방해하지 않는다
+    // 사람을 맞추는 중이거나 찍는 중에는 방해하지 않는다
     final busy = ref.watch(
-      compositionProvider.select((s) => (s?.hasPerson ?? false) && !s!.fits),
+      compositionProvider.select(
+        (s) => s != null && (s.paused || (s.hasPerson && !s.fits)),
+      ),
     );
     return AnimatedOpacity(
       opacity: guide.state == AngleState.off && !busy ? 1 : 0,
@@ -932,20 +976,24 @@ class _AngleIndicatorLayer extends ConsumerWidget {
 
 /// 하단 코칭 문구. 센서·포즈 주기로 갱신되므로 분리.
 class _CoachLayer extends ConsumerWidget {
-  const _CoachLayer({required this.preset});
+  const _CoachLayer({required this.preset, required this.shooting});
 
   final Preset? preset;
+  final bool shooting;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (shooting) return const CoachPill(message: CoachMessage.shooting);
     final preset = this.preset;
+    final state = preset == null ? null : ref.watch(compositionProvider);
+    // 렌즈를 바꾸는 중
+    if (state?.paused ?? false) return const CoachPill(message: null);
     return CoachPill(
       message: CoachMessage.of(
         angle: ref.watch(angleGuideProvider),
-        fit: preset == null
-            ? null
-            : ref.watch(compositionProvider)?.fit ?? CompositionFit.none,
+        fit: preset == null ? null : state?.fit ?? CompositionFit.none,
         ready: ref.watch(shootSignalProvider) == ShootSignal.ready,
+        front: ref.watch(activeLensProvider) == CameraLensDirection.front,
       ),
     );
   }
@@ -977,9 +1025,10 @@ class _DynamicFrameLayer extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(compositionProvider);
     final targets = Target.of(preset, finder);
-    // 화면 비율·반전이 방금 바뀌었으면 새 자리로
+    // 화면 비율·반전이 방금 바뀌었으면 새 자리로, 인식이 멈췄으면 사람 프레임을 숨긴다
     final current =
         state != null &&
+        !state.paused &&
         state.targets.length == targets.length &&
         targets.isNotEmpty &&
         state.targets.first.center == targets.first.center;

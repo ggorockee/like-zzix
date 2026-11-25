@@ -12,6 +12,9 @@ import 'preset_providers.dart';
 /// 촬영 신호. 셔터 링 색·진동·자동 촬영이 이 값 하나를 따른다.
 /// 초록([ready])은 **사람의 크기·위치와 폰 각도가 모두 맞을 때만** 켜진다.
 enum ShootSignal {
+  /// 촬영·렌즈 전환으로 인식이 멈춤 (흰색)
+  paused,
+
   /// 센서 대기·폰이 눕혀짐·사람이 아직 없음 (흰색)
   waiting,
 
@@ -28,7 +31,9 @@ enum ShootSignal {
     AngleState? angle, {
     required bool hasPerson,
     required bool fits,
+    bool paused = false,
   }) {
+    if (paused) return ShootSignal.paused;
     if (angle == null || angle == AngleState.waiting || !hasPerson) {
       return waiting;
     }
@@ -44,6 +49,9 @@ final shootSignalProvider =
     );
 
 class ShootSignalNotifier extends Notifier<ShootSignal?> {
+  /// 멈추기 직전의 신호
+  ShootSignal? _beforePause;
+
   @override
   ShootSignal? build() {
     final preset = ref.watch(activePresetProvider);
@@ -60,15 +68,18 @@ class ShootSignalNotifier extends Notifier<ShootSignal?> {
       ref.read(angleGuideProvider)?.state,
       hasPerson: composition?.hasPerson ?? false,
       fits: composition?.fits ?? false,
+      paused: composition?.paused ?? false,
     );
   }
 
   void _refresh() {
-    final before = state;
+    if (state != ShootSignal.paused) _beforePause = state;
     final now = _compute();
-    if (before == now) return;
+    if (state == now) return;
     state = now;
-    if (now != ShootSignal.ready) return;
+    // 멈췄다 이어진 초록불은 새로 맞춘 것이 아니다
+    final before = _beforePause;
+    if (now != ShootSignal.ready || before == ShootSignal.ready) return;
     ref
         .read(telemetryProvider)
         ?.record(
