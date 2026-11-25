@@ -19,6 +19,9 @@ class _FakeAngle extends AngleGuideNotifier {
 
   final AngleState angle;
 
+  void set(AngleState s) =>
+      state = AngleGuide(state: s, pitchDelta: 0, rollDelta: 0);
+
   @override
   AngleGuide? build() =>
       AngleGuide(state: angle, pitchDelta: 0, rollDelta: 0, pitchError: 5);
@@ -130,13 +133,51 @@ void main() {
     expect(signal(c), ShootSignal.waiting);
   });
 
-  test('전면 카메라는 폰을 돌릴 방향이 반대', () async {
+  test('폰을 옮길 방향은 전면 카메라에서도 화면 방향 그대로', () async {
     final c = await container(AngleState.good);
     await frames(c, [person(const Offset(70, 0))]);
-    expect(c.read(compositionProvider)!.fit.action, CoachAction.panRight);
+    expect(c.read(compositionProvider)!.fit.action, CoachAction.moveRight);
     c.read(activeLensProvider.notifier).set(CameraLensDirection.front);
     await frames(c, [person(const Offset(70, 0))]);
-    expect(c.read(compositionProvider)!.fit.action, CoachAction.panLeft);
+    expect(c.read(compositionProvider)!.fit.action, CoachAction.moveRight);
+  });
+
+  group('촬영 중 인식이 멈추면', () {
+    test('남은 판정으로 초록불이 켜지지 않고, 새 프레임으로 다시 판정한다', () async {
+      final c = await container(AngleState.off);
+      await frames(c, [person()]);
+      expect(signal(c), ShootSignal.angleOff);
+
+      // 촬영 시작 → 사람은 화면에서 벗어나고 폰 각도만 맞음
+      c.read(compositionProvider.notifier).pause();
+      (c.read(angleGuideProvider.notifier) as _FakeAngle).set(AngleState.good);
+      await c.pump();
+      expect(signal(c), ShootSignal.paused);
+
+      now = now.add(const Duration(seconds: 4));
+      await frames(c, const [], count: 1);
+      expect(signal(c), ShootSignal.waiting);
+      expect(haptics, isEmpty);
+    });
+
+    test('그대로 서 있으면 초록불이 이어지고 진동은 다시 울리지 않는다', () async {
+      final c = await container(AngleState.good);
+      await frames(c, [person()]);
+      expect(haptics, hasLength(1));
+      c.read(compositionProvider.notifier).pause();
+      await c.pump();
+      expect(signal(c), ShootSignal.paused);
+      now = now.add(const Duration(seconds: 4));
+      await frames(c, [person()], count: 1);
+      expect(signal(c), ShootSignal.ready);
+      expect(haptics, hasLength(1));
+    });
+
+    test('구도가 없으면 아무 일도 없다', () async {
+      final c = await container(AngleState.good);
+      c.read(compositionProvider.notifier).pause();
+      expect(c.read(compositionProvider), isNull);
+    });
   });
 
   test('고스트·안내 패널: 고른 직후와 사람이 없을 때만', () async {

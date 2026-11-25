@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/app_theme.dart';
 import '../models/coach.dart';
+import 'phone_motion_icon.dart';
 
 /// 하단 코칭 문구: 지금 할 행동 하나만.
 class CoachPill extends StatelessWidget {
@@ -21,7 +22,11 @@ class CoachPill extends StatelessWidget {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       margin: const EdgeInsets.symmetric(horizontal: 16),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+      padding: EdgeInsets.symmetric(
+        horizontal: 16,
+        // 그림이 있어도 높이는 같게
+        vertical: message.motion == null ? 9 : 5,
+      ),
       decoration: BoxDecoration(
         color: background,
         borderRadius: BorderRadius.circular(22),
@@ -29,7 +34,10 @@ class CoachPill extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(message.icon, size: 20, color: foreground),
+          if (message.motion case final motion?)
+            PhoneMotionIcon(motion: motion, color: foreground)
+          else
+            Icon(message.icon, size: 20, color: foreground),
           const SizedBox(width: 8),
           Flexible(
             child: Text(

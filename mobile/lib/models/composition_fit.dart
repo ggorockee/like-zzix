@@ -18,8 +18,8 @@ enum CoachAction {
   showFeet,
   stepBack,
   stepCloser,
-  panLeft,
-  panRight,
+  moveLeft,
+  moveRight,
   raisePhone,
   lowerPhone,
   lookLeft,
@@ -358,10 +358,10 @@ class CompositionFit {
   final List<TargetFit> targets;
   final CoachAction action;
 
-  /// 앞뒤로 움직일 걸음 수 (0이면 "조금만")
+  /// 앞뒤로 움직일 걸음 수 (0이면 "반 걸음")
   final int steps;
 
-  /// 한 사람만 옮길 때 누구인지 (앞·뒤·왼쪽·오른쪽)
+  /// 한 사람만 옮길 때 누구인지 (앞사람·왼쪽 사람 등)
   final String? who;
 
   static const enterScore = 90.0;
@@ -441,9 +441,10 @@ class CompositionFit {
       final tol = fits.map((f) => f.tolerance).reduce(math.min);
       if (fits.length == 1 || mean.distance > tol * 0.6) {
         if (mean.dx.abs() >= mean.dy.abs()) {
-          // 사람이 목표보다 오른쪽이면 폰을 오른쪽으로 돌려야 왼쪽으로 온다
+          // 사람이 목표보다 오른쪽이면 폰을 오른쪽으로 옮겨야 왼쪽으로 온다
+          // (전면 카메라는 화면이 거울처럼 보여 같은 방향)
           return result(
-            mean.dx > 0 ? CoachAction.panRight : CoachAction.panLeft,
+            mean.dx > 0 ? CoachAction.moveRight : CoachAction.moveLeft,
           );
         }
         return result(
@@ -525,8 +526,8 @@ class CompositionFit {
 
   static String _name(List<Target> targets, int i) {
     final label = targets[i].label;
-    if (label != null) return '$label 분';
+    if (label != null) return label;
     final leftmost = targets.every((t) => t.center.dx >= targets[i].center.dx);
-    return leftmost ? '왼쪽 분' : '오른쪽 분';
+    return leftmost ? '왼쪽 사람' : '오른쪽 사람';
   }
 }

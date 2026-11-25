@@ -343,13 +343,13 @@ class _DynamicFramePainter extends CustomPainter {
       p.part(GuidePart.head),
       v,
       idle: '머리',
-      done: '머리 OK',
+      done: '머리 맞음',
       above: true,
     );
     final (idle, done) = switch (t.span) {
-      BodyAnchor.feet => ('발끝', '발끝 완벽!'),
-      BodyAnchor.hips => ('앉은 자리', '자리 OK'),
-      _ => ('어깨', '어깨 OK'),
+      BodyAnchor.feet => ('발끝', '발끝 맞음'),
+      BodyAnchor.hips => ('앉은 자리', '앉은 자리 맞음'),
+      _ => ('어깨', '어깨 맞음'),
     };
     _anchorLine(
       canvas,

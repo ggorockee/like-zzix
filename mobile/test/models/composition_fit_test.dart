@@ -97,8 +97,8 @@ void main() {
 
     test('위치 힌트', () {
       CoachAction at(Offset o) => fit(t, [face(t.single, shift: o)]).action;
-      expect(at(const Offset(60, 0)), CoachAction.panRight);
-      expect(at(const Offset(-60, 0)), CoachAction.panLeft);
+      expect(at(const Offset(60, 0)), CoachAction.moveRight);
+      expect(at(const Offset(-60, 0)), CoachAction.moveLeft);
       expect(at(const Offset(0, 60)), CoachAction.lowerPhone);
       expect(at(const Offset(0, -60)), CoachAction.raisePhone);
     });
@@ -169,7 +169,7 @@ void main() {
       const s = Offset(60, 0);
       expect(
         fit(t, [face(t[0], shift: s), face(t[1], shift: s)]).action,
-        CoachAction.panRight,
+        CoachAction.moveRight,
       );
       final one = fit(t, [
         face(t[0], shift: const Offset(0, 50)),
@@ -182,7 +182,7 @@ void main() {
     test('한 사람만 크면 그 사람이 뒤로', () {
       final f = fit(t, [face(t[0], scale: 2), face(t[1], scale: 0.95)]);
       expect(f.action, CoachAction.personBack);
-      expect(f.who, '낮게 분');
+      expect(f.who, '앉은 사람');
     });
   });
 
@@ -252,35 +252,73 @@ void main() {
       int steps = 0,
       String? who,
       bool ready = false,
+      bool front = false,
     }) => CoachMessage.of(
       angle: g,
       fit: CompositionFit(targets: const [], action: a, steps: steps, who: who),
       ready: ready,
+      front: front,
     )?.text;
 
     test('행동으로 안내', () {
-      expect(say(CoachAction.stepBack, angle(), steps: 2), '뒤로 두 걸음');
-      expect(say(CoachAction.stepCloser, angle()), '조금만 앞으로 가세요');
-      expect(say(CoachAction.lookLeft, angle()), '얼굴을 화살표(왼쪽) 쪽으로');
-      expect(say(CoachAction.personUp, angle(), who: '왼쪽 분'), '왼쪽 분, 조금 더 높게');
+      expect(say(CoachAction.stepBack, angle(), steps: 2), '뒤로 두 걸음 가세요');
+      expect(say(CoachAction.stepCloser, angle()), '앞으로 반 걸음 가세요');
+      expect(say(CoachAction.lookLeft, angle()), '찍히는 사람, 화살표 쪽을 보세요');
+      expect(
+        say(CoachAction.personUp, angle(), who: '왼쪽 사람'),
+        '왼쪽 사람, 몸을 높이세요',
+      );
     });
 
     test('거리 → 폰 각도 → 위치 → 시선 순', () {
       final off = angle(error: 8);
-      expect(say(CoachAction.stepBack, off, steps: 1), '뒤로 한 걸음');
+      expect(say(CoachAction.stepBack, off, steps: 1), '뒤로 한 걸음 가세요');
       for (final a in [
-        CoachAction.panLeft,
+        CoachAction.moveLeft,
         CoachAction.lookLeft,
         CoachAction.hold,
       ]) {
-        expect(say(a, off), '폰을 살짝 들어 주세요');
+        expect(say(a, off), '폰 윗부분을 내 쪽으로 기울이세요');
       }
-      expect(say(CoachAction.hold, angle(error: -8)), '폰을 살짝 숙여 주세요');
+      expect(say(CoachAction.hold, angle(error: -8)), '폰 윗부분을 내 반대쪽으로 기울이세요');
     });
 
     test('완성이 최우선, 눕히면 세우라고', () {
       expect(say(CoachAction.hold, angle(), ready: true), '완벽해요! 지금 찍으세요');
-      expect(say(CoachAction.stepBack, angle(upright: false)), '폰을 세워서 들어 주세요');
+      expect(say(CoachAction.stepBack, angle(upright: false)), '폰을 똑바로 세우세요');
+    });
+
+    test('전면 카메라는 폰을 앞뒤로 기울일 방향이 반대', () {
+      expect(
+        say(CoachAction.hold, angle(error: 8), front: true),
+        '폰 윗부분을 내 반대쪽으로 기울이세요',
+      );
+      expect(
+        say(CoachAction.hold, angle(error: -8), front: true),
+        '폰 윗부분을 내 쪽으로 기울이세요',
+      );
+    });
+
+    test('높이와 기울임이 헷갈리는 말을 쓰지 않고, 폰 움직임은 그림이 있다', () {
+      final messages = [
+        for (final a in CoachAction.values)
+          for (final g in [angle(), angle(error: 8), angle(error: -8)])
+            for (final front in [false, true])
+              CoachMessage.of(
+                angle: g,
+                fit: CompositionFit(targets: const [], action: a),
+                ready: false,
+                front: front,
+              )!,
+      ];
+      for (final m in messages) {
+        for (final vague in ['들어', '숙여', '살짝', '조금', '분,', '담아']) {
+          expect(m.text, isNot(contains(vague)));
+        }
+        if (m.text.startsWith('폰 윗부분') || m.text.startsWith('폰을 세운 채')) {
+          expect(m.motion, isNotNull, reason: m.text);
+        }
+      }
     });
   });
 }

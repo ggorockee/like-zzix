@@ -1,13 +1,11 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:camera/camera.dart' show CameraLensDirection;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/composition_fit.dart';
 import '../models/subject.dart';
-import 'camera_providers.dart';
 import 'preset_providers.dart';
 
 /// 화면 속 사람들과 구도의 현재 상태.
@@ -17,6 +15,7 @@ class CompositionState {
     required this.targets,
     required this.fit,
     this.fits = false,
+    this.paused = false,
   });
 
   final List<Target> targets;
@@ -24,6 +23,10 @@ class CompositionState {
 
   /// 구도 일치 (90점 이상 진입, 86점 미만 이탈, [CompositionController.holdDuration] 유지)
   final bool fits;
+
+  /// 촬영·렌즈 전환으로 인식이 멈춘 상태. 판정이 지금 화면과 다를 수 있어
+  /// 초록불과 안내에 쓰지 않는다.
+  final bool paused;
 
   bool get hasPerson => fit.hasPerson;
 }
@@ -80,6 +83,24 @@ class CompositionController extends Notifier<CompositionState?> {
   void clear() {
     _reset();
     state = null;
+  }
+
+  /// 인식을 잠시 멈출 때 부른다. 다음 [update]에서 새 프레임으로 다시 판정한다.
+  void pause() {
+    final last = state;
+    if (last == null || last.paused) return;
+    // 멈추기 전의 사람 위치는 이어 쓰지 않는다 ([lostGrace]도 주지 않는다)
+    for (final track in _tracks) {
+      track
+        ..person = null
+        ..seenAt = null;
+    }
+    state = CompositionState(
+      targets: last.targets,
+      fit: last.fit,
+      fits: last.fits,
+      paused: true,
+    );
   }
 
   /// [people]은 이번 프레임에서 찾은 사람들, [focal]은 화면 단위 초점거리.
@@ -145,7 +166,6 @@ class CompositionController extends Notifier<CompositionState?> {
     );
   }
 
-  /// 전면 카메라는 화면이 좌우반전이라 폰을 돌릴 방향이 반대.
   /// 행동 안내는 [actionDwell] 동안 유지해 문구가 깜빡이지 않게 한다.
   CompositionFit _steady(
     CompositionFit fit,
@@ -153,13 +173,6 @@ class CompositionController extends Notifier<CompositionState?> {
     DateTime now,
   ) {
     var action = fit.action;
-    if (ref.read(activeLensProvider) == CameraLensDirection.front) {
-      action = switch (action) {
-        CoachAction.panLeft => CoachAction.panRight,
-        CoachAction.panRight => CoachAction.panLeft,
-        _ => action,
-      };
-    }
     final urgent =
         action == CoachAction.hold ||
         action == CoachAction.findPerson ||
