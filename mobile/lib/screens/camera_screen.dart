@@ -175,12 +175,12 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       cameras = await ref.read(availableCamerasProvider.future);
     } on Object {
       if (mounted) setState(() => _issue = _CameraIssue.unavailable);
-      _record(AppEvent.cameraUnavailable);
+      _recordIssueOnce(AppEvent.cameraUnavailable);
       return;
     }
     if (cameras.isEmpty) {
       if (mounted) setState(() => _issue = _CameraIssue.unavailable);
-      _record(AppEvent.cameraUnavailable);
+      _recordIssueOnce(AppEvent.cameraUnavailable);
       return;
     }
     final description = LensChoice.main(cameras, _lens) ?? cameras.first;
@@ -196,12 +196,15 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       await controller.dispose();
       if (!mounted) return;
       _permissionAsked = e.code.startsWith('CameraAccess') && !_foreground;
+      final denied = e.code.startsWith('CameraAccess');
       setState(
-        () => _issue = e.code.startsWith('CameraAccess')
+        () => _issue = denied
             ? _CameraIssue.permissionDenied
             : _CameraIssue.failed,
       );
-      _record(AppEvent.cameraUnavailable);
+      _recordIssueOnce(
+        denied ? AppEvent.cameraPermissionDenied : AppEvent.cameraFailed,
+      );
       return;
     }
     // 초기화 중 화면을 떠났으면 닫는다 (resumed에서 다시 연다).
@@ -350,6 +353,14 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
 
   void _record(AppEvent event, {String? preset}) =>
       ref.read(telemetryProvider)?.record(event, preset: preset);
+
+  /// 같은 화면에서 카메라 문제는 원인별로 한 번만 센다. 권한 창이나 설정에서
+  /// 돌아올 때마다 다시 열기를 시도하므로, 매번 세면 비율이 부풀려진다.
+  final Set<AppEvent> _reportedIssues = {};
+
+  void _recordIssueOnce(AppEvent event) {
+    if (_reportedIssues.add(event)) _record(event);
+  }
 
   // ---------------------------------------------------------------------------
   // 실시간 포즈 인식
