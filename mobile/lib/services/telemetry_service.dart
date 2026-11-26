@@ -13,6 +13,8 @@ enum AppEvent {
   photoSaved('photo_saved'),
   photoSaveFailed('photo_save_failed'),
   cameraUnavailable('camera_unavailable'),
+  cameraPermissionDenied('camera_permission_denied'),
+  cameraFailed('camera_failed'),
   galleryOpened('gallery_opened'),
   updatePromptShown('update_prompt_shown'),
   forceUpdateShown('force_update_shown'),
