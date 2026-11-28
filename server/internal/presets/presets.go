@@ -22,7 +22,7 @@ var raw []byte
 // LandmarkCount is the BlazePose topology size shared by the app and admin.
 const LandmarkCount = 33
 
-// Preset mirrors the app's preset schema (01_MOBILE.md section 5). Unknown
+// Preset mirrors the app's preset schema (2.1-모바일-앱-설계.md section 5). Unknown
 // fields are kept in Extra so the server never drops data the app expects.
 type Preset struct {
 	ID        string          `json:"id"`

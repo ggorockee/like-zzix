@@ -1,4 +1,4 @@
-/** 앱·서버와 같은 프리셋 스키마 (claudedocs/planning/01_MOBILE.md 5장) */
+/** 앱·서버와 같은 프리셋 스키마 (claudedocs/2-설계/2.1-모바일-앱-설계.md 5장) */
 export interface PresetDoc {
   id: string
   category: string
