@@ -6,7 +6,7 @@ import 'low_pass_filter.dart';
 
 /// 세로 모드 기준 휴대폰 자세 (도 단위).
 ///
-/// - [pitchDeg]: 카메라가 수평보다 아래를 보면 +, 위를 보면 − (`01_MOBILE.md` 5장과 동일)
+/// - [pitchDeg]: 카메라가 수평보다 아래를 보면 +, 위를 보면 − (`2.1-모바일-앱-설계.md` 5장과 동일)
 /// - [rollDeg]: 화면 기준 반시계로 돌아가면 +
 @immutable
 class Attitude {

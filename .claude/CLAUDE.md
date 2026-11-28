@@ -2,7 +2,7 @@
 
 ## 업데이트 안내 카드 (다음 버전부터 적용)
 
-2026-11-27 결정: 앞으로 업데이트는 화면 대부분을 덮는 넘김 카드로 알립니다. 세 앱 공통 표준은 infra 저장소 `claudedocs/app-update-card.md`, 기준 구현은 reviewmaps `mobile/`(2.2.3)입니다. 아직 적용 전이며 지금은 `mobile/lib/widgets/update_dialog.dart`의 작은 팝업을 씁니다.
+2026-11-27 결정: 앞으로 업데이트는 화면 대부분을 덮는 넘김 카드로 알립니다. 세 앱 공통 표준은 infra 저장소 `claudedocs/2-앱-운영/2.2-업데이트-안내-카드-표준.md`, 기준 구현은 reviewmaps `mobile/`(2.2.3)입니다. 아직 적용 전이며 지금은 `mobile/lib/widgets/update_dialog.dart`의 작은 팝업을 씁니다.
 
 | 순서 | 다음 앱 버전에서 할 일 |
 |------|------------------------|
@@ -14,3 +14,7 @@
 | 6 | 이전 버전 위에 덮어 설치해 카드 1회 표시, 새 설치에는 없는지 확인 |
 
 적용한 뒤에는 릴리스마다 `release_notes.json`을 갱신합니다.
+
+## 문서 번호 체계 (2026-11-29)
+
+문서는 `claudedocs/<번호>-<주제>/<번호>-<이름>.md`(1, 1.1, 1.1.1)로 두고 첫 제목에 같은 번호를 붙이며 목차 `claudedocs/README.md`에 추가한다. CLAUDE.md·폴더 README·스토어 listing.md 는 옮기지 않는다.
